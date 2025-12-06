@@ -9,7 +9,19 @@ import pdf_redactor
 
 ## Set options.
 
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-i", "--input", help="Source PDF file")
+parser.add_argument("-o", "--output", help="Destination PDF file")
+args = parser.parse_args()
+
 options = pdf_redactor.RedactorOptions()
+if args.input:
+	options.input_stream = open(args.input, "rb")
+if args.output:
+	options.output_stream = open(args.output, "wb")
 
 options.metadata_filters = {
 	# Perform some field filtering --- turn the Title into uppercase.

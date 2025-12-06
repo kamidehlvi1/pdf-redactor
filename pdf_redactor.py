@@ -851,4 +851,16 @@ def update_annotation_action(annotation, action, options):
 
 
 if __name__ == "__main__":
-	redactor(RedactorOptions())
+	import argparse
+	parser = argparse.ArgumentParser()
+	parser.add_argument("-i", "--input", help="Source PDF file")
+	parser.add_argument("-o", "--output", help="Destination PDF file")
+	args = parser.parse_args()
+
+	options = RedactorOptions()
+	if args.input:
+		options.input_stream = open(args.input, "rb")
+	if args.output:
+		options.output_stream = open(args.output, "wb")
+	
+	redactor(options)

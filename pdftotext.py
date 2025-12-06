@@ -13,7 +13,15 @@ def printer(m):
 	print(s)
 	return ""
 
-options = pdf_redactor.RedactorOptions()
-options.output_stream = io.BytesIO() # null
-options.content_filters = [(re.compile("[\w\W]+"), printer)]
-pdf_redactor.redactor(options)
+if __name__ == "__main__":
+	import argparse
+	parser = argparse.ArgumentParser()
+	parser.add_argument("-i", "--input", help="Source PDF file")
+	args = parser.parse_args()
+
+	options = pdf_redactor.RedactorOptions()
+	if args.input:
+		options.input_stream = open(args.input, "rb")
+	options.output_stream = io.BytesIO() # null
+	options.content_filters = [(re.compile("[\w\W]+"), printer)]
+	pdf_redactor.redactor(options)
