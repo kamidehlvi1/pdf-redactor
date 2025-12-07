@@ -42,6 +42,8 @@ def decrypt_data(encrypted_data, password):
         plaintext = unpad(cipher.decrypt(ciphertext), AES.block_size)
         return plaintext.decode('utf-8')
     except Exception as e:
+        if "Padding is incorrect" in str(e):
+             return "Error: Incorrect Password"
         return "Decryption Failed: " + str(e)
 
 def redaction_handler(match):
@@ -96,19 +98,22 @@ def run_decrypt(args):
     """
     Reads the .secure file and displays original data.
     """
-    secure_file = args.input # Use input arg for the secure file or assume sidecar? 
-    # Let's assume input is the .secure file or the pdf path + .secure
+    secure_file = args.input
+    
+    # If the user passed the PDF filename, check if a .secure version exists
+    if not secure_file.endswith(".secure") and os.path.exists(secure_file + ".secure"):
+        secure_file = secure_file + ".secure"
     
     if not os.path.exists(secure_file):
-        # Try appending .secure
-        if os.path.exists(secure_file + ".secure"):
-            secure_file = secure_file + ".secure"
-        else:
-            print("Error: Secure file not found: " + secure_file)
-            return
+        print("Error: Secure file not found: " + secure_file)
+        return
 
-    with open(secure_file, "r") as f:
-        encrypted_blob = f.read()
+    try:
+        with open(secure_file, "r") as f:
+            encrypted_blob = f.read()
+    except UnicodeDecodeError:
+        print("Error: Could not read '%s'. Are you sure this is the secure text file and not the PDF?" % secure_file)
+        return
             
     print("Decrypting data from " + secure_file + "...")
     json_data = decrypt_data(encrypted_blob, args.password)
