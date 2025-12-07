@@ -1,0 +1,148 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Secure PDF Redactor</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #container { position: relative; border: 1px solid #ccc; display: inline-block; }
+        canvas { display: block; }
+        #selection-box {
+            position: absolute;
+            border: 2px solid red;
+            background: rgba(255, 0, 0, 0.2);
+            display: none;
+            pointer-events: none; /* Let events pass through to canvas handler */
+        }
+        .controls { margin-top: 20px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';</script>
+</head>
+<body>
+    <h1>Secure PDF Redactor</h1>
+    
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul style="color: red;">
+        {% for message in messages %}
+          <li>{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    {% if not filename %}
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <label>Upload PDF:</label>
+        <input type="file" name="pdf_file" accept=".pdf" required>
+        <button type="submit">Upload</button>
+    </form>
+    {% else %}
+    
+    <div class="controls">
+        <form action="/redact" method="post">
+            <input type="hidden" name="filename" value="{{ filename }}">
+            <input type="hidden" name="page" id="page-input" value="1">
+            <input type="hidden" name="x" id="x-input">
+            <input type="hidden" name="y" id="y-input">
+            <input type="hidden" name="w" id="w-input">
+            <input type="hidden" name="h" id="h-input">
+            
+            <label>Password to Protect:</label>
+            <input type="password" name="password" required>
+            <button type="submit">Redact Selected Area</button>
+            <a href="/">Cancel</a>
+        </form>
+        <p>Click and drag on the PDF to select an area.</p>
+    </div>
+
+    <div id="container">
+        <canvas id="the-canvas"></canvas>
+        <div id="selection-box"></div>
+    </div>
+    
+    <script>
+        var url = '/uploads/{{ filename }}';
+        var pdfDoc = null,
+            pageNum = 1,
+            scale = 1.0,
+            canvas = document.getElementById('the-canvas'),
+            ctx = canvas.getContext('2d');
+            
+        // Load PDF
+        pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
+            pdfDoc = pdfDoc_;
+            renderPage(pageNum);
+        });
+
+        function renderPage(num) {
+            pdfDoc.getPage(num).then(function(page) {
+                var viewport = page.getViewport({scale: scale});
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                var renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                page.render(renderContext);
+            });
+        }
+        
+        // Selection Logic
+        var selectionBox = document.getElementById('selection-box');
+        var container = document.getElementById('container');
+        var isDrawing = false;
+        var startX, startY;
+        
+        container.addEventListener('mousedown', function(e) {
+            var rect = container.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            isDrawing = true;
+            
+            selectionBox.style.left = startX + 'px';
+            selectionBox.style.top = startY + 'px';
+            selectionBox.style.width = '0px';
+            selectionBox.style.height = '0px';
+            selectionBox.style.display = 'block';
+        });
+
+        container.addEventListener('mousemove', function(e) {
+            if (!isDrawing) return;
+            var rect = container.getBoundingClientRect();
+            var currentX = e.clientX - rect.left;
+            var currentY = e.clientY - rect.top;
+            
+            var width = currentX - startX;
+            var height = currentY - startY;
+            
+            selectionBox.style.width = Math.abs(width) + 'px';
+            selectionBox.style.height = Math.abs(height) + 'px';
+            selectionBox.style.left = (width < 0 ? currentX : startX) + 'px';
+            selectionBox.style.top = (height < 0 ? currentY : startY) + 'px';
+        });
+
+        container.addEventListener('mouseup', function(e) {
+            isDrawing = false;
+            
+            // Save coordinates
+            var rect = selectionBox.getBoundingClientRect();
+            var containerRect = container.getBoundingClientRect();
+            
+            // Coordinates relative to canvas
+            var x = rect.left - containerRect.left;
+            var y = rect.top - containerRect.top;
+            var w = rect.width;
+            var h = rect.height;
+            
+            document.getElementById('x-input').value = x;
+            document.getElementById('y-input').value = y;
+            document.getElementById('w-input').value = w;
+            document.getElementById('h-input').value = h;
+        });
+    </script>
+    {% endif %}
+</body>
+</html>
