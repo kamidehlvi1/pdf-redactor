@@ -6,96 +6,124 @@ from PyPDF2 import PdfFileWriter, PdfFileReader
 from PyPDF2.generic import DictionaryObject, NumberObject, FloatObject, NameObject, ArrayObject
 from secure_redact import encrypt_data
 
-def redact_region(input_pdf, output_pdf, page_num, rect_coords, password):
+import uuid
+import os
+
+def redact_regions(input_pdf, output_pdf, page_num, zones):
     """
-    Redacts a specific rectangular region on a specific page by adding a black rectangle annotation.
-    rect_coords: (x, y, w, h) - Note: PDF.js gives x, y, w, h. PyMuPDF wanted x0, y0, x1, y1. 
-    PyPDF2 annotations need Rect [x ll, y ll, x ur, y ur].
-    
-    IMPORTANT: PDF coordinates usually start from bottom-left. 
-    PDF.js gives coordinates from top-left. We need page height to convert Y.
+    Redacts multiple rectangular regions on a specific page.
+    zones: List of dicts, each having:
+           {'rect': (x, y, w, h), 'password': '...'}
     """
     
     output = PdfFileWriter()
-    input1 = PdfFileReader(open(input_pdf, "rb"))
     
-    # Validation
-    if page_num < 0 or page_num >= input1.getNumPages():
-        raise ValueError("Invalid page number")
-
-    # Copy pages
-    for i in range(input1.getNumPages()):
-        page = input1.getPage(i)
+    with open(input_pdf, "rb") as f_in:
+        input1 = PdfFileReader(f_in)
         
-        if i == page_num:
-            # Get Page Height for coordinate conversion
-            # MediaBox is [x_ll, y_ll, x_ur, y_ur]
-            media_box = page.mediaBox
-            page_height = float(media_box[3])
-            
-            # Convert PDF.js (top-left) to PDF (bottom-left)
-            # Input rect: x, y, w, h (from app.py which received it from frontend)
-            # The app.py currently converts x,y,w,h to x0,y0,x1,y1 assuming PyMuPDF.
-            # Let's adjust app.py to pass raw x, y, w, h or handle it here.
-            # Let's assume input rect_coords is (x, y, w, h) from PDF.js (Top-Left origin)
-            
-            x = rect_coords[0]
-            y = rect_coords[1]
-            w = rect_coords[2]
-            h = rect_coords[3]
-            
-            # PDF Y = PageHeight - (TopY + Height)  (Lower Left Y)
-            # PDF Upper Y = PageHeight - TopY       (Upper Right Y)
-            
-            rect_ll_x = x
-            rect_ll_y = page_height - (y + h)
-            rect_ur_x = x + w
-            rect_ur_y = page_height - y
-            
-            # Create the Redaction Annotation (Black Rectangle)
-            # In PDF 1.4+, we can just add a square annotation with black fill.
-            
-            new_annot = DictionaryObject()
-            new_annot.update({
-                NameObject("/Type"): NameObject("/Annot"),
-                NameObject("/Subtype"): NameObject("/Square"),
-                NameObject("/Rect"): ArrayObject([
-                    FloatObject(rect_ll_x),
-                    FloatObject(rect_ll_y),
-                    FloatObject(rect_ur_x),
-                    FloatObject(rect_ur_y)
-                ]),
-                NameObject("/IC"): ArrayObject([FloatObject(0), FloatObject(0), FloatObject(0)]), # Interior Color (Black)
-                NameObject("/C"): ArrayObject([FloatObject(0), FloatObject(0), FloatObject(0)]),  # Border Color (Black)
-                NameObject("/F"): NumberObject(4), # Flags (Print)
-            })
-            
-            # Add annotation to page
-            if "/Annots" in page:
-                page["/Annots"].append(new_annot)
-            else:
-                page[NameObject("/Annots")] = ArrayObject([new_annot])
-            
-            # Text Extraction (simplified - page level, not region level easily with PyPDF2 1.26)
-            # Since PyPDF2 1.26 doesn't support easy text extraction by area, 
-            # we will encrypt a placeholder or full page text. 
-            # Ideally we'd use pdf_redactor (pdfrw) to filter content stream, but that's complex for coordinates.
-            # Compromise for this environment: Encrypt full page text or just metadata.
-            # Let's try to extract full text of page for now as 'redacted content'
-            extracted_text = page.extractText()
-            
-        output.addPage(page)
-
-    with open(output_pdf, "wb") as outputStream:
-        output.write(outputStream)
-        
-    # Encrypt the text
-    json_data = json.dumps([extracted_text])
-    encrypted_text = encrypt_data(json_data, password)
+        if page_num < 0 or page_num >= input1.getNumPages():
+            raise ValueError("Invalid page number")
     
-    return encrypted_text
+        extracted_text = ""
+        new_entries = []
+    
+        for i in range(input1.getNumPages()):
+            page = input1.getPage(i)
+            
+            if i == page_num:
+                # 1. Extract text ONCE for the page (limit of PyPDF2)
+                try:
+                    extracted_text = page.extractText()
+                except:
+                    extracted_text = ""
+
+                # Get Page Height for coordinate conversion
+                if "/MediaBox" in page:
+                    media_box = page["/MediaBox"]
+                else:
+                    media_box = page.mediaBox
+                page_height = float(media_box[3])
+                
+                if "/Annots" in page:
+                    annots = page["/Annots"]
+                    if hasattr(annots, "getObject"):
+                        annots = annots.getObject()
+                else:
+                    annots = ArrayObject()
+                    page[NameObject("/Annots")] = annots
+
+                # 2. Iterate over all zones to add visual redactions
+                for zone in zones:
+                    rect_coords = zone['rect']
+                    password = zone['password']
+                    x, y, w, h = rect_coords
+                    
+                    # Store original PDF.js coords
+                    target_rect = [x, y, w, h] 
+                    
+                    # Convert to PDF Coords
+                    rect_ll_x = x
+                    rect_ll_y = page_height - (y + h)
+                    rect_ur_x = x + w
+                    rect_ur_y = page_height - y
+                    
+                    # Create Black Rectangle Annotation
+                    new_annot = DictionaryObject()
+                    new_annot.update({
+                        NameObject("/Type"): NameObject("/Annot"),
+                        NameObject("/Subtype"): NameObject("/Square"),
+                        NameObject("/Rect"): ArrayObject([
+                            FloatObject(rect_ll_x),
+                            FloatObject(rect_ll_y),
+                            FloatObject(rect_ur_x),
+                            FloatObject(rect_ur_y)
+                        ]),
+                        NameObject("/IC"): ArrayObject([FloatObject(0), FloatObject(0), FloatObject(0)]),
+                        NameObject("/C"): ArrayObject([FloatObject(0), FloatObject(0), FloatObject(0)]),
+                        NameObject("/F"): NumberObject(4),
+                    })
+                    
+                    annots.append(new_annot)
+                    
+                    # 3. Create Encrypted Entry for this zone
+                    encrypted_blob = encrypt_data(extracted_text, password)
+                    new_entries.append({
+                        "id": str(uuid.uuid4()),
+                        "page": page_num,
+                        "rect": target_rect,
+                        "content": encrypted_blob
+                    })
+
+                # Update page annotations
+                page[NameObject("/Annots")] = annots
+                
+            output.addPage(page)
+    
+        with open(output_pdf, "wb") as outputStream:
+            output.write(outputStream)
+            
+    # Handle Sidecar File
+    sidecar_path = output_pdf + ".secure"
+    existing_data = []
+    
+    if os.path.exists(sidecar_path):
+        try:
+            with open(sidecar_path, "r") as f:
+                existing_data = json.load(f)
+                if not isinstance(existing_data, list):
+                    existing_data = [] 
+        except:
+             existing_data = []
+             
+    existing_data.extend(new_entries)
+    
+    with open(sidecar_path, "w") as f:
+        json.dump(existing_data, f)
+    
+    return sidecar_path
 
 if __name__ == "__main__":
+    # Support basic single-zone CLI usage by wrapping it in a list
     if len(sys.argv) < 9:
         print("Usage: python rect_redactor.py input.pdf output.pdf page x y w h password")
         sys.exit(1)
@@ -103,14 +131,12 @@ if __name__ == "__main__":
     input_pdf = sys.argv[1]
     output_pdf = sys.argv[2]
     page = int(sys.argv[3])
-    # Expecting x, y, w, h
     rect = (float(sys.argv[4]), float(sys.argv[5]), float(sys.argv[6]), float(sys.argv[7]))
     password = sys.argv[8]
     
-    secure_blob = redact_region(input_pdf, output_pdf, page, rect, password)
+    zone = {'rect': rect, 'password': password}
     
-    # Save sidecar
-    with open(output_pdf + ".secure", "w") as f:
-        f.write(secure_blob)
+    secure_path = redact_regions(input_pdf, output_pdf, page, [zone])
         
     print("Redacted region saved to " + output_pdf)
+

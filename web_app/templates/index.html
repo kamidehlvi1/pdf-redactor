@@ -1,84 +1,414 @@
-
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>Secure PDF Redactor</title>
+    <title>Secure PDF Redactor 2.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        #container { position: relative; border: 1px solid #ccc; display: inline-block; }
-        canvas { display: block; }
+        body {
+            font-family: 'Inter', sans-serif;
+            padding: 20px;
+            background: #f4f4f4;
+            color: #333;
+        }
+
+        h1 {
+            color: #2c3e50;
+        }
+
+        .mode-switch {
+            margin-bottom: 20px;
+        }
+
+        .mode-btn {
+            padding: 10px 20px;
+            background: #ddd;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            border-radius: 5px 5px 0 0;
+        }
+
+        .mode-btn.active {
+            background: #fff;
+            color: #007bff;
+            border-bottom: 2px solid #007bff;
+        }
+
+        .panel {
+            background: #fff;
+            padding: 20px;
+            border-radius: 0 5px 5px 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        #container {
+            position: relative;
+            border: 1px solid #ccc;
+            display: inline-block;
+            margin-top: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* Redaction Box (Drawing) */
         #selection-box {
             position: absolute;
             border: 2px solid red;
             background: rgba(255, 0, 0, 0.2);
             display: none;
-            pointer-events: none; /* Let events pass through to canvas handler */
+            pointer-events: none;
         }
-        .controls { margin-top: 20px; }
+
+        /* Secure Zone Overlay (Viewing) */
+        .secure-zone {
+            position: absolute;
+            border: 2px dashed #007bff;
+            background: rgba(0, 123, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .secure-zone:hover {
+            background: rgba(0, 123, 255, 0.3);
+        }
+
+        .secure-zone::after {
+            content: "SECURE";
+            color: #007bff;
+            font-weight: bold;
+            font-size: 10px;
+            position: absolute;
+            top: -15px;
+            left: 0;
+        }
+
+        /* Modal */
+        #modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            width: 400px;
+            max-width: 90%;
+            text-align: center;
+        }
+
+        #decrypted-content {
+            white-space: pre-wrap;
+            text-align: left;
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #eee;
+            margin-top: 10px;
+            max-height: 200px;
+            overflow: auto;
+        }
+
+        .timer {
+            font-size: 1.5em;
+            color: #e74c3c;
+            margin-top: 10px;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: 600;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            margin-top: 5px;
+        }
+
+        /* Updated Modern Styles */
+        .action-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+
+        .action-btn:active {
+            transform: scale(0.98);
+        }
+
+        .action-btn.primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .action-btn.primary:hover {
+            background: #0056b3;
+        }
+
+        .action-btn.secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .action-btn.danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .modern-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .upload-section {
+            border: 2px dashed #ddd;
+            padding: 30px;
+            text-align: center;
+            border-radius: 8px;
+        }
+
+        .instructions ol {
+            padding-left: 20px;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .actions-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .pending-zone {
+            position: absolute;
+            background: rgba(220, 53, 69, 0.3);
+            border: 2px solid #dc3545;
+            cursor: default;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        a {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';</script>
 </head>
-<body>
-    <h1>Secure PDF Redactor</h1>
-    
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <ul style="color: red;">
-        {% for message in messages %}
-          <li>{{ message }}</li>
-        {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
 
-    {% if not filename %}
-    <form action="/upload" method="post" enctype="multipart/form-data">
-        <label>Upload PDF:</label>
-        <input type="file" name="pdf_file" accept=".pdf" required>
-        <button type="submit">Upload</button>
-    </form>
-    {% else %}
-    
-    <div class="controls">
-        <form action="/redact" method="post">
-            <input type="hidden" name="filename" value="{{ filename }}">
-            <input type="hidden" name="page" id="page-input" value="1">
-            <input type="hidden" name="x" id="x-input">
-            <input type="hidden" name="y" id="y-input">
-            <input type="hidden" name="w" id="w-input">
-            <input type="hidden" name="h" id="h-input">
-            
-            <label>Password to Protect:</label>
-            <input type="password" name="password" required>
-            <button type="submit">Redact Selected Area</button>
-            <a href="/">Cancel</a>
-        </form>
-        <p>Click and drag on the PDF to select an area.</p>
+<body>
+
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>Secure PDF Redactor</h1>
+        <div class="mode-switch">
+            <button class="mode-btn active" onclick="switchMode('redact')">REDACT MODE</button>
+            <button class="mode-btn" onclick="switchMode('view')">VIEW MODE</button>
+        </div>
     </div>
 
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div style="background: #ffcccc; color: #cc0000; padding: 10px; border-radius: 5px;">
+        {% for message in messages %}
+        {{ message }}<br>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- REDACT PANEL -->
+    <div id="panel-redact" class="panel active">
+        {% if not filename or 'redacted' not in filename %}
+        <div class="upload-section">
+            <h3>Upload PDF to Redact</h3>
+            <form action="/upload" method="post" enctype="multipart/form-data" class="upload-form">
+                <input type="file" name="pdf_file" accept=".pdf" required class="file-input">
+                <button type="submit" class="action-btn primary">Upload Document</button>
+            </form>
+        </div>
+        {% endif %}
+
+        {% if filename %}
+        <div class="controls">
+            <div class="instructions">
+                <h3>Redaction Controls</h3>
+                <ol>
+                    <li>Draw a box over sensitive information.</li>
+                    <li>Set a unique password for that zone.</li>
+                    <li>Repeat for other areas.</li>
+                    <li>Click <strong>Process Redaction</strong> to finish.</li>
+                </ol>
+            </div>
+
+            <form action="/redact" method="post" id="redact-form">
+                <input type="hidden" name="filename" value="{{ filename }}">
+                <input type="hidden" name="page" id="page-input" value="1">
+                <!-- We now send a JSON string of all zones -->
+                <input type="hidden" name="zones" id="zones-input">
+
+                <div id="pending-zones-list">
+                    <h4>Pending Redactions: <span id="zone-count">0</span></h4>
+                    <!-- List items will be injected here -->
+                </div>
+
+                <div class="actions-row">
+                    <button type="button" class="action-btn danger" onclick="clearZones()">Clear All</button>
+                    <button type="submit" class="action-btn primary">Process Redaction</button>
+                </div>
+
+                {% if filename and 'redacted' in filename %}
+                <div class="download-links">
+                    <strong>Download Results:</strong>
+                    <a href="/uploads/{{ filename }}" download>Redacted PDF</a> |
+                    <a href="/uploads/{{ filename }}.secure" download>Secure Sidecar File</a>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- VIEW PANEL -->
+    <div id="panel-view" class="panel">
+        <h3>Secure Viewer</h3>
+        <p>For this demo, we assume the file you just uploaded/redacted is the one to view.</p>
+        <p>If you were a recipient, you would upload the files here (not implemented in this demo for simplicity,
+            reusing current session file).</p>
+
+        <button onclick="loadSecureView()" class="action">Load Interactive View</button>
+        <p><small>Click distinct blue zones to decrypt.</small></p>
+    </div>
+
+    <!-- PDF CONTAINER (Shared) -->
+    {% if filename %}
     <div id="container">
         <canvas id="the-canvas"></canvas>
         <div id="selection-box"></div>
+        <div id="overlays"></div>
     </div>
-    
+    {% endif %}
+
+    <!-- DECRYPT MODAL -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <h3>Secure Access</h3>
+            <div id="modal-login">
+                <p>Enter the password for this secure zone:</p>
+                <input type="password" id="modal-pass" class="modern-input" placeholder="Password">
+                <button onclick="submitDecrypt()" class="action-btn primary">Unlock Data</button>
+                <p id="modal-error" style="color:red; margin-top:10px;"></p>
+            </div>
+            <div id="modal-content" style="display:none;">
+                <h4>Decrypted Data</h4>
+                <div id="decrypted-content"></div>
+                <div class="timer" id="timer">60:00</div>
+                <button onclick="closeModal()" class="action-btn secondary" style="margin-top:20px;">Close (Data
+                    Vanishes)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW PASSWORD CREATION MODAL -->
+    <div id="password-modal-overlay" class="modal-overlay" style="display:none;">
+        <div class="modal">
+            <h3>Protect This Zone</h3>
+            <p>Enter a unique password to secure this specific area.</p>
+            <input type="password" id="new-zone-password" class="modern-input" placeholder="Set Password">
+            <div class="modal-actions">
+                <button onclick="cancelZone()" class="action-btn secondary">Cancel</button>
+                <button onclick="confirmZone()" class="action-btn primary">Set Password</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        var url = '/uploads/{{ filename }}';
+        var currentFilename = "{{ filename }}";
+        var isRedactMode = true;
+
+        function switchMode(mode) {
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+
+            if (mode === 'redact') {
+                document.querySelector('[onclick="switchMode(\'redact\')"]').classList.add('active');
+                document.getElementById('panel-redact').classList.add('active');
+                document.getElementById('selection-box').style.display = 'none';
+                document.getElementById('overlays').innerHTML = '';
+                isRedactMode = true;
+            } else {
+                document.querySelector('[onclick="switchMode(\'view\')"]').classList.add('active');
+                document.getElementById('panel-view').classList.add('active');
+                isRedactMode = false;
+            }
+        }
+
+        // PDF Rendering
+        {% if filename %}
+        var url = '/uploads/' + currentFilename;
         var pdfDoc = null,
             pageNum = 1,
             scale = 1.0,
             canvas = document.getElementById('the-canvas'),
             ctx = canvas.getContext('2d');
-            
-        // Load PDF
-        pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
+
+        pdfjsLib.getDocument(url).promise.then(function (pdfDoc_) {
             pdfDoc = pdfDoc_;
             renderPage(pageNum);
         });
 
         function renderPage(num) {
-            pdfDoc.getPage(num).then(function(page) {
-                var viewport = page.getViewport({scale: scale});
+            pdfDoc.getPage(num).then(function (page) {
+                var viewport = page.getViewport({ scale: scale });
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
 
@@ -89,19 +419,24 @@
                 page.render(renderContext);
             });
         }
-        
-        // Selection Logic
+
+        // REDACTION DRAWING LOGIC
         var selectionBox = document.getElementById('selection-box');
         var container = document.getElementById('container');
         var isDrawing = false;
         var startX, startY;
-        
-        container.addEventListener('mousedown', function(e) {
+
+        // Multi-zone state
+        var pendingZones = []; // Array of {rect: [x,y,w,h], password: "..."}
+        var currentDraftRect = null; // {x, y, w, h, el}
+
+        container.addEventListener('mousedown', function (e) {
+            if (!isRedactMode) return;
             var rect = container.getBoundingClientRect();
             startX = e.clientX - rect.left;
             startY = e.clientY - rect.top;
             isDrawing = true;
-            
+
             selectionBox.style.left = startX + 'px';
             selectionBox.style.top = startY + 'px';
             selectionBox.style.width = '0px';
@@ -109,40 +444,224 @@
             selectionBox.style.display = 'block';
         });
 
-        container.addEventListener('mousemove', function(e) {
-            if (!isDrawing) return;
+        container.addEventListener('mousemove', function (e) {
+            if (!isDrawing || !isRedactMode) return;
             var rect = container.getBoundingClientRect();
             var currentX = e.clientX - rect.left;
             var currentY = e.clientY - rect.top;
-            
+
             var width = currentX - startX;
             var height = currentY - startY;
-            
+
             selectionBox.style.width = Math.abs(width) + 'px';
             selectionBox.style.height = Math.abs(height) + 'px';
             selectionBox.style.left = (width < 0 ? currentX : startX) + 'px';
             selectionBox.style.top = (height < 0 ? currentY : startY) + 'px';
         });
 
-        container.addEventListener('mouseup', function(e) {
+        container.addEventListener('mouseup', function (e) {
+            if (!isRedactMode || !isDrawing) return;
             isDrawing = false;
-            
-            // Save coordinates
+
             var rect = selectionBox.getBoundingClientRect();
             var containerRect = container.getBoundingClientRect();
-            
-            // Coordinates relative to canvas
-            var x = rect.left - containerRect.left;
-            var y = rect.top - containerRect.top;
+
             var w = rect.width;
             var h = rect.height;
-            
-            document.getElementById('x-input').value = x;
-            document.getElementById('y-input').value = y;
-            document.getElementById('w-input').value = w;
-            document.getElementById('h-input').value = h;
+
+            // Ignore tiny accidental clicks
+            if (w < 5 && h < 5) {
+                selectionBox.style.display = 'none';
+                return;
+            }
+
+            var x = rect.left - containerRect.left;
+            var y = rect.top - containerRect.top;
+
+            currentDraftRect = [x, y, w, h];
+
+            // Show password prompt immediately
+            showPasswordModal();
         });
+
+        // PASSWORD MODAL LOGIC
+        var passModal = document.getElementById('password-modal-overlay');
+        var passInput = document.getElementById('new-zone-password');
+
+        function showPasswordModal() {
+            passModal.style.display = 'flex';
+            passInput.value = '';
+            passInput.focus();
+        }
+
+        function cancelZone() {
+            passModal.style.display = 'none';
+            selectionBox.style.display = 'none';
+            currentDraftRect = null;
+        }
+
+        function confirmZone() {
+            var pwd = passInput.value;
+            if (!pwd) {
+                alert("Password is required for this zone.");
+                return;
+            }
+
+            // Add to list
+            pendingZones.push({
+                rect: currentDraftRect,
+                password: pwd
+            });
+
+            // Render visual persistence
+            renderPendingZone(currentDraftRect);
+
+            // Update UI count
+            updateZoneCount();
+
+            // Reset
+            passModal.style.display = 'none';
+            selectionBox.style.display = 'none';
+            currentDraftRect = null;
+        }
+
+        function renderPendingZone(r) {
+            var el = document.createElement('div');
+            el.className = 'pending-zone';
+            el.style.left = r[0] + 'px';
+            el.style.top = r[1] + 'px';
+            el.style.width = r[2] + 'px';
+            el.style.height = r[3] + 'px';
+            el.title = "Pending Redaction (Secured)";
+
+            var icon = document.createElement('span');
+            icon.innerText = "🔒";
+            icon.style.position = "absolute";
+            icon.style.top = "50%";
+            icon.style.left = "50%";
+            icon.style.transform = "translate(-50%, -50%)";
+            icon.style.fontSize = "20px";
+
+            el.appendChild(icon);
+            document.getElementById('overlays').appendChild(el);
+        }
+
+        function updateZoneCount() {
+            document.getElementById('zone-count').innerText = pendingZones.length;
+        }
+
+        function clearZones() {
+            pendingZones = [];
+            document.getElementById('overlays').innerHTML = ''; // Clears both view overlays and pending redacts
+            updateZoneCount();
+            if (!isRedactMode) loadSecureView(); // Reload view overlays if we were in view mode (unlikely here)
+        }
+
+        // Intercept form submission
+        document.getElementById('redact-form')?.addEventListener('submit', function (e) {
+            if (pendingZones.length === 0) {
+                e.preventDefault();
+                alert("Please draw at least one redaction zone.");
+                return;
+            }
+            document.getElementById('zones-input').value = JSON.stringify(pendingZones);
+        });
+
+        // VIEW MODE LOGIC
+        function loadSecureView() {
+            if (!currentFilename) return;
+
+            fetch('/api/secure_metadata/' + currentFilename)
+                .then(res => res.json())
+                .then(data => {
+                    var container = document.getElementById('overlays');
+                    container.innerHTML = '';
+
+                    data.zones.forEach(zone => {
+                        // Only for current page in this demo
+                        if (zone.page !== (pageNum - 1)) return;
+
+                        var el = document.createElement('div');
+                        el.className = 'secure-zone';
+                        // rect is [x, y, w, h] from our rect_redactor (which stored PDF.js coords)
+                        el.style.left = zone.rect[0] + 'px';
+                        el.style.top = zone.rect[1] + 'px';
+                        el.style.width = zone.rect[2] + 'px';
+                        el.style.height = zone.rect[3] + 'px';
+
+                        el.onclick = function () {
+                            openModal(zone.content);
+                        };
+
+                        container.appendChild(el);
+                    });
+                });
+        }
+
+        // DECRYPTION MODAL
+        var currentEncryptedContent = null;
+        var timerInterval = null;
+
+        function openModal(content) {
+            currentEncryptedContent = content;
+            document.getElementById('modal-overlay').style.display = 'flex';
+            document.getElementById('modal-login').style.display = 'block';
+            document.getElementById('modal-content').style.display = 'none';
+            document.getElementById('modal-pass').value = '';
+            document.getElementById('modal-error').innerText = '';
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').style.display = 'none';
+            document.getElementById('decrypted-content').innerText = '';
+            if (timerInterval) clearInterval(timerInterval);
+        }
+
+        function submitDecrypt() {
+            var pwd = document.getElementById('modal-pass').value;
+            fetch('/api/decrypt_zone', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: currentEncryptedContent, password: pwd })
+            })
+                .then(res => {
+                    if (res.ok) return res.json();
+                    return res.json().then(e => { throw new Error(e.error) });
+                })
+                .then(data => {
+                    document.getElementById('modal-login').style.display = 'none';
+                    document.getElementById('modal-content').style.display = 'block';
+                    document.getElementById('decrypted-content').innerText = data.text;
+                    startTimer(60 * 60); // 60 minutes
+                })
+                .catch(e => {
+                    document.getElementById('modal-error').innerText = e.message;
+                });
+        }
+
+        function startTimer(duration) {
+            var display = document.getElementById('timer');
+            var timer = duration, minutes, seconds;
+            if (timerInterval) clearInterval(timerInterval);
+
+            timerInterval = setInterval(function () {
+                minutes = parseInt(timer / 60, 10);
+                seconds = parseInt(timer % 60, 10);
+
+                minutes = minutes < 10 ? "0" + minutes : minutes;
+                seconds = seconds < 10 ? "0" + seconds : seconds;
+
+                display.textContent = minutes + ":" + seconds;
+
+                if (--timer < 0) {
+                    closeModal(); // Time's up
+                }
+            }, 1000);
+        }
+
+        {% endif %}
     </script>
-    {% endif %}
+
 </body>
+
 </html>

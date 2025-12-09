@@ -2,6 +2,7 @@
 import os
 import sys
 import uuid
+import json
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash
 
 # Add parent directory to path to import local modules
@@ -49,65 +50,109 @@ def uploaded_file(filename):
 @app.route('/redact', methods=['POST'])
 def redact():
     filename = request.form['filename']
-    password = request.form['password']
     page = int(request.form['page'])
-    x = float(request.form['x'])
-    y = float(request.form['y'])
-    w = float(request.form['w'])
-    h = float(request.form['h'])
+    zones_json = request.form.get('zones', '[]')
     
-    # Coordinates from frontend (PDF.js) are top-left based.
-    # PyMuPDF Rect is (x0, y0, x1, y1)
-    # Frontend sends x, y, w, h
-    x0 = x
-    y0 = y
-    x1 = x + w
-    y1 = y + h
-    rect = (x0, y0, x1, y1)
+    try:
+        zones = json.loads(zones_json)
+    except:
+        zones = []
+        
+    if not zones:
+        flash("No redaction zones provided")
+        return redirect(url_for('editor', filename=filename))
     
     input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    output_filename = "redacted_" + filename
+    
+    # We want to overwrite or chain redactions. 
+    # If filename starts with "redacted_", we keep using it.
+    # If not, we switch to "redacted_" version.
+    
+    if filename.startswith("redacted_"):
+        output_filename = filename
+    else:
+        output_filename = "redacted_" + filename
+        
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
     
     try:
-        # Redact
-        secure_blob = rect_redactor.redact_region(input_path, output_path, page - 1, rect, password)
-        
-        # Save secure sidecar
-        with open(output_path + ".secure", "w") as f:
-            f.write(secure_blob)
+        if os.path.exists(output_path) and output_filename == filename:
+            # In-place update (we are editing the redacted file)
+            temp_out = output_path + ".tmp"
             
-        return redirect(url_for('view_secure', filename=output_filename))
+            # Perform redaction to temp file
+            rect_redactor.redact_regions(output_path, temp_out, page - 1, zones)
+            
+            # Move temp PDF to real output
+            os.remove(output_path)
+            os.rename(temp_out, output_path)
+            
+            # Handle Sidecar:
+            # rect_redactor appends to "temp_out + .secure"
+            # We need to merge this into "output_path + .secure"
+            temp_secure = temp_out + ".secure"
+            real_secure = output_path + ".secure"
+             
+            if os.path.exists(temp_secure):
+                 # Load new entries from temp secure
+                 with open(temp_secure, "r") as f:
+                     new_data = json.load(f)
+                 os.remove(temp_secure)
+                 
+                 # Append to real secure file
+                 existing = []
+                 if os.path.exists(real_secure):
+                      with open(real_secure, "r") as f:
+                          try: existing = json.load(f)
+                          except: pass
+                 
+                 existing.extend(new_data)
+                 with open(real_secure, "w") as f:
+                     json.dump(existing, f)
+            
+        else:
+            # First time redaction (Input -> Output)
+            rect_redactor.redact_regions(input_path, output_path, page - 1, zones)
+            
+        return redirect(url_for('editor', filename=output_filename))
     except Exception as e:
         flash(str(e))
         return redirect(url_for('editor', filename=filename))
 
-@app.route('/view/<filename>')
-def view_secure(filename):
-    return render_template('view.html', filename=filename)
+# New API to checking if secure file exists and getting regions
+@app.route('/api/secure_metadata/<filename>')
+def secure_metadata(filename):
+    secure_path = os.path.join(app.config['UPLOAD_FOLDER'], filename + ".secure")
+    if os.path.exists(secure_path):
+        try:
+            with open(secure_path, "r") as f:
+                data = json.load(f)
+            return {"zones": data}
+        except:
+             return {"zones": []} # Corrupt or empty
+    return {"zones": []}
 
-@app.route('/api/decrypt', methods=['POST'])
-def decrypt():
-    filename = request.json['filename']
+@app.route('/api/decrypt_zone', methods=['POST'])
+def decrypt_zone():
+    encrypted_content = request.json['content'] # The blob
     password = request.json['password']
     
-    secure_path = os.path.join(app.config['UPLOAD_FOLDER'], filename + ".secure")
-    
-    if not os.path.exists(secure_path):
-        return {"error": "Secure file not found"}, 404
-        
     try:
-        with open(secure_path, "r") as f:
-            encrypted_blob = f.read()
-            
-        json_data = decrypt_data(encrypted_blob, password)
+        # Our secure_redact.decrypt_data returns string
+        # encrypt_data output was b64 string.
+        # decrypt_data takes b64 string.
+        decrypted = decrypt_data(encrypted_content, password)
         
-        if json_data.startswith("Decryption Failed") or json_data.startswith("Error"):
+        if decrypted.startswith("Decryption Failed") or decrypted.startswith("Error"):
              return {"error": "Incorrect Password"}, 401
              
-        import json
-        items = json.loads(json_data)
-        return {"text": items[0]} # We only stored one item in rect_redactor
+        # Result might be JSON string if we encrypted json.dumps(text)
+        try:
+            val = json.loads(decrypted)
+            return {"text": val} 
+        except:
+            return {"text": decrypted}
+            
     except Exception as e:
         return {"error": str(e)}, 500
 
