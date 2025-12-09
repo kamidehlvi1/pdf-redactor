@@ -5,9 +5,38 @@ import base64
 from PyPDF2 import PdfFileWriter, PdfFileReader
 from PyPDF2.generic import DictionaryObject, NumberObject, FloatObject, NameObject, ArrayObject
 from secure_redact import encrypt_data
+import pdf_redactor
+from pdfrw import PdfReader
 
 import uuid
 import os
+
+def get_page_text_pdfrw(pdf_path, page_num):
+    """
+    Robust text extraction using pdfrw / pdf_redactor logic.
+    Extracts text only from the specified page index.
+    """
+    try:
+        options = pdf_redactor.RedactorOptions()
+        # We don't perform any actual redaction writing here, just reading.
+        # pdf_redactor needs a stream but we will load document manually.
+        
+        doc = PdfReader(pdf_path)
+        if page_num < 0 or page_num >= len(doc.pages):
+             return ""
+        
+        # Hack: Limit processing to just this page to be faster and specific
+        doc.pages = [doc.pages[page_num]]
+        
+        # Build text layer
+        text_layer = pdf_redactor.build_text_layer(doc, options)
+        text_tokens = text_layer[0]
+        
+        # Join text
+        return "".join([t.value for t in text_tokens])
+    except Exception as e:
+        sys.stderr.write("Error extracting text with pdfrw: " + str(e) + "\n")
+        return ""
 
 def redact_regions(input_pdf, output_pdf, page_num, zones):
     """
@@ -31,11 +60,9 @@ def redact_regions(input_pdf, output_pdf, page_num, zones):
             page = input1.getPage(i)
             
             if i == page_num:
-                # 1. Extract text ONCE for the page (limit of PyPDF2)
-                try:
-                    extracted_text = page.extractText()
-                except:
-                    extracted_text = ""
+                # 1. Extract text using robust pdfrw method
+                # We do this independent of PyPDF2 open file to avoid conflicts/pointer issues
+                extracted_text = get_page_text_pdfrw(input_pdf, page_num)
 
                 # Get Page Height for coordinate conversion
                 if "/MediaBox" in page:
@@ -86,7 +113,13 @@ def redact_regions(input_pdf, output_pdf, page_num, zones):
                     annots.append(new_annot)
                     
                     # 3. Create Encrypted Entry for this zone
-                    encrypted_blob = encrypt_data(extracted_text, password)
+                    if not extracted_text or not extracted_text.strip():
+                        content_to_store = "[No text content extracted from this page]"
+                    else:
+                        content_to_store = extracted_text
+                        
+                    json_data = json.dumps(content_to_store)
+                    encrypted_blob = encrypt_data(json_data, password)
                     new_entries.append({
                         "id": str(uuid.uuid4()),
                         "page": page_num,
