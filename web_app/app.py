@@ -35,7 +35,49 @@ def upload_file():
     if file.filename == '':
         flash('No selected file')
         return redirect(url_for('index'))
+        
     if file:
+        filename = file.filename
+        
+        # Handle Zip Bundle Upload
+        if filename.lower().endswith('.zip'):
+             temp_zip_path = os.path.join(app.config['UPLOAD_FOLDER'], "temp_" + str(uuid.uuid4()) + ".zip")
+             file.save(temp_zip_path)
+             
+             extracted_pdf_name = None
+             
+             try:
+                 with zipfile.ZipFile(temp_zip_path, 'r') as zf:
+                     zf.extractall(app.config['UPLOAD_FOLDER'])
+                     # Find the PDF
+                     for name in zf.namelist():
+                         if name.lower().endswith('.pdf'):
+                             extracted_pdf_name = name
+                             # We check if corresponding .secure exists?
+                             # Unzip does that automatically if it's in the zip.
+                             break
+             except Exception as e:
+                 flash("Invalid Zip File: " + str(e))
+                 return redirect(url_for('index'))
+             finally:
+                 if os.path.exists(temp_zip_path):
+                     os.remove(temp_zip_path)
+            
+             if extracted_pdf_name:
+                 return redirect(url_for('editor', filename=extracted_pdf_name))
+             else:
+                 flash("No PDF find in the Zip bundle")
+                 return redirect(url_for('index'))
+
+        # Normal PDF Upload (Ensure unique name or strict overwrite? User expectation is overwrite usually if same name, but UUID safer)
+        # Using UUID for new uploads to avoid conflicts, but if we want to "restore" a file, we might keep name.
+        # Let's keep existing logic of UUID for NEW PDFs, but for Zip we used the internal name.
+        
+        # Check logic: The original code used UUID. let's stick to UUID for fresh uploads.
+        if not filename.lower().endswith('.pdf'):
+             flash("Invalid file type. Please upload PDF or Zip.")
+             return redirect(url_for('index'))
+             
         filename = str(uuid.uuid4()) + ".pdf"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
