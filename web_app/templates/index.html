@@ -251,6 +251,8 @@
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <h1>Secure PDF Redactor</h1>
         <div class="mode-switch">
+            <button class="btn btn-primary" id="download-bundle-btn" style="display:none; margin-right:10px;"
+                onclick="downloadBundle()">Download Package</button>
             <button class="mode-btn active" onclick="switchMode('redact')">REDACT MODE</button>
             <button class="mode-btn" onclick="switchMode('view')">VIEW MODE</button>
         </div>
@@ -577,6 +579,14 @@
                     var container = document.getElementById('overlays');
                     container.innerHTML = '';
 
+                    if (data.zones && data.zones.length > 0) {
+                        document.getElementById('download-bundle-btn').style.display = 'inline-block';
+                    }
+
+                    if (data.zones && data.zones.length > 0) {
+                        document.getElementById('download-bundle-btn').style.display = 'inline-block';
+                    }
+
                     data.zones.forEach(zone => {
                         // Only for current page in this demo
                         if (zone.page !== (pageNum - 1)) return;
@@ -657,6 +667,10 @@
                     closeModal(); // Time's up
                 }
             }, 1000);
+        }
+
+        function downloadBundle() {
+            if (currentFilename) window.location.href = "/download_bundle/" + currentFilename;
         }
 
         {% endif %}

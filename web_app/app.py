@@ -10,6 +10,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import rect_redactor
 from secure_redact import decrypt_data
+import zipfile
+import io
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey" # For flash messages
@@ -155,6 +157,47 @@ def decrypt_zone():
             
     except Exception as e:
         return {"error": str(e)}, 500
+
+
+@app.route('/download_bundle/<filename>')
+def download_bundle(filename):
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    secure_path = file_path + ".secure"
+    
+    if not os.path.exists(file_path):
+        flash("File not found")
+        return redirect(url_for('index'))
+        
+    # Create in-memory zip
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, 'w') as zf:
+        # Add PDF
+        zf.write(file_path, filename)
+        
+        # Add Secure Sidecar (if exists)
+        if os.path.exists(secure_path):
+            zf.write(secure_path, filename + ".secure")
+            
+        # Add Instructions
+        readme_content = """SECURE REDACTION VIEWER INSTRUCTIONS
+====================================
+
+1. This package contains a Redacted PDF and a Secure Data file (.secure).
+2. To view the original content of the redacted areas, you must use the Secure Viewer Web App.
+3. Open the Web App and Upload this PDF.
+4. Click on any redacted area (black box).
+5. Enter the password provided to you by the document owner.
+
+NOTE: Each redacted area may have a DIFFERENT password.
+"""
+        zf.writestr("README.txt", readme_content)
+        
+    memory_file.seek(0)
+    
+    from flask import send_file
+    return send_file(memory_file, 
+                     attachment_filename="secure_bundle_" + filename + ".zip", 
+                     as_attachment=True)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
