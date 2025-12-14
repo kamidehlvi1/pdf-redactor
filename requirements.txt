@@ -1,2 +1,9 @@
 pdfrw>=0.4
 defusedxml
+flask
+flask-login
+flask-sqlalchemy
+ldap3
+minio
+python-dotenv
+email-validator

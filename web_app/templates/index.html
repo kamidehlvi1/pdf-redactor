@@ -54,14 +54,12 @@
             margin: 20px auto;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             max-width: fit-content;
-            /* Ensure it wraps the canvas tightly but stays centered */
         }
 
         canvas {
             display: block;
         }
 
-        /* Redaction Box (Drawing) */
         #selection-box {
             position: absolute;
             border: 2px solid red;
@@ -70,7 +68,7 @@
             pointer-events: none;
         }
 
-        /* Secure Zone Overlay (Viewing) */
+        /* Secure Zone Overlay */
         .secure-zone {
             position: absolute;
             border: 2px dashed #007bff;
@@ -93,81 +91,50 @@
             left: 0;
         }
 
-        /* Modal */
-        #modal-overlay {
+        /* Modals */
+        .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 1000;
+            z-index: 2000;
+            display: none;
         }
 
         .modal {
             background: #fff;
             padding: 30px;
             border-radius: 8px;
-            width: 400px;
+            width: 450px;
             max-width: 90%;
-            text-align: center;
         }
 
-        #decrypted-content {
-            white-space: pre-wrap;
-            text-align: left;
-            background: #f9f9f9;
-            padding: 10px;
-            border: 1px solid #eee;
-            margin-top: 10px;
-            max-height: 200px;
-            overflow: auto;
-        }
-
-        .timer {
-            font-size: 1.5em;
-            color: #e74c3c;
-            margin-top: 10px;
-        }
-
-        label {
-            display: block;
-            margin-top: 10px;
-            font-weight: 600;
-        }
-
-        input[type="text"],
-        input[type="password"] {
+        /* Modern Inputs */
+        .modern-input {
             width: 100%;
-            padding: 8px;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin-bottom: 10px;
             box-sizing: border-box;
-            margin-top: 5px;
         }
 
-        /* Updated Modern Styles */
         .action-btn {
             padding: 10px 20px;
             border: none;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 500;
-            transition: transform 0.1s, opacity 0.2s;
-        }
-
-        .action-btn:active {
-            transform: scale(0.98);
         }
 
         .action-btn.primary {
             background: #007bff;
             color: white;
-        }
-
-        .action-btn.primary:hover {
-            background: #0056b3;
         }
 
         .action-btn.secondary {
@@ -180,68 +147,69 @@
             color: white;
         }
 
-        .modern-input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
+        /* User Search Styles */
+        .user-search-container {
+            position: relative;
             margin-bottom: 15px;
-            font-size: 14px;
         }
 
-        .upload-section {
-            border: 2px dashed #ddd;
-            padding: 30px;
-            text-align: center;
-            border-radius: 8px;
-        }
-
-        .instructions ol {
-            padding-left: 20px;
-            color: #555;
-            line-height: 1.6;
-        }
-
-        .actions-row {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        .pending-zone {
+        .search-results {
             position: absolute;
-            background: rgba(220, 53, 69, 0.3);
-            border: 2px solid #dc3545;
-            cursor: default;
-        }
-
-        .modal-overlay {
-            position: fixed;
-            top: 0;
+            top: 100%;
             left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.6);
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 10;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .search-item {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+
+        .search-item:hover {
+            background: #f0f7ff;
+        }
+
+        .selected-users {
             display: flex;
-            justify-content: center;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .user-tag {
+            background: #e2e6ea;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            display: flex;
             align-items: center;
-            z-index: 2000;
+            gap: 5px;
         }
 
-        .modal-actions {
+        .user-tag span {
+            cursor: pointer;
+            font-weight: bold;
+            color: #dc3545;
+        }
+
+        .header-controls {
             display: flex;
-            justify-content: flex-end;
-            gap: 10px;
+            align-items: center;
+            width: 100%;
+            justify-content: space-between;
         }
 
-        a {
-            color: #007bff;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        a:hover {
-            text-decoration: underline;
+        .user-info {
+            font-size: 14px;
+            color: #666;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
@@ -250,14 +218,20 @@
 
 <body>
 
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h1>Secure PDF Redactor</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div>
+            <h1>Secure PDF Redactor</h1>
+            {% if user and user.is_authenticated %}
+            <span class="user-info">Logged in as: <strong>{{ user.username }}</strong> {% if user.email %}({{ user.email
+                }}){% endif %}</span>
+            <a href="/logout" style="font-size:12px; margin-left:10px;">Logout</a>
+            {% if user.username == 'admin' %} | <a href="/admin" style="font-size:12px;">Admin</a> {% endif %}
+            {% endif %}
+        </div>
         <div class="mode-switch">
             <a href="/" class="btn btn-secondary"
                 style="margin-right:10px; text-decoration:none; padding:10px 20px; background:#6c757d; color:white; border-radius:5px;">Start
                 New</a>
-            <button class="btn btn-primary" id="download-bundle-btn" style="display:none; margin-right:10px;"
-                onclick="downloadBundle()">Download Package</button>
             <button class="mode-btn active" onclick="switchMode('redact')">REDACT MODE</button>
             <button class="mode-btn" onclick="switchMode('view')">VIEW MODE</button>
         </div>
@@ -265,10 +239,8 @@
 
     {% with messages = get_flashed_messages() %}
     {% if messages %}
-    <div style="background: #ffcccc; color: #cc0000; padding: 10px; border-radius: 5px;">
-        {% for message in messages %}
-        {{ message }}<br>
-        {% endfor %}
+    <div style="background: #ffcccc; color: #cc0000; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
+        {% for message in messages %} {{ message }}<br> {% endfor %}
     </div>
     {% endif %}
     {% endwith %}
@@ -276,10 +248,11 @@
     <!-- REDACT PANEL -->
     <div id="panel-redact" class="panel active">
         {% if not filename or 'redacted' not in filename %}
-        <div class="upload-section">
+        <div class="upload-section" style="text-align:center; padding: 40px; border: 2px dashed #ccc;">
             <h3>Upload PDF or Secure Bundle (Zip)</h3>
-            <form action="/upload" method="post" enctype="multipart/form-data" class="upload-form">
-                <input type="file" name="pdf_file" accept=".pdf,.zip" required class="file-input">
+            <form action="/upload" method="post" enctype="multipart/form-data">
+                <input type="file" name="pdf_file" accept=".pdf,.zip" required class="modern-input" style="width:auto;">
+                <br><br>
                 <button type="submit" class="action-btn primary">Upload Document</button>
             </form>
         </div>
@@ -291,21 +264,19 @@
                 <h3>Redaction Controls</h3>
                 <ol>
                     <li>Draw a box over sensitive information.</li>
-                    <li>Set a unique password for that zone.</li>
-                    <li>Repeat for other areas.</li>
-                    <li>Click <strong>Process Redaction</strong> to finish.</li>
+                    <li>Select Users (Local/AD) to grant access.</li>
+                    <li>Password will be auto-generated and emailed (or set manually).</li>
+                    <li>Click <strong>Process Redaction</strong>.</li>
                 </ol>
             </div>
 
             <form action="/redact" method="post" id="redact-form">
                 <input type="hidden" name="filename" value="{{ filename }}">
                 <input type="hidden" name="page" id="page-input" value="1">
-                <!-- We now send a JSON string of all zones -->
                 <input type="hidden" name="zones" id="zones-input">
 
                 <div id="pending-zones-list">
                     <h4>Pending Redactions: <span id="zone-count">0</span></h4>
-                    <!-- List items will be injected here -->
                 </div>
 
                 <div class="actions-row">
@@ -314,10 +285,11 @@
                 </div>
 
                 {% if filename and 'redacted' in filename %}
-                <div class="download-links">
+                <div class="download-links"
+                    style="margin-top:20px; padding:10px; background:#e9ecef; border-radius:4px;">
                     <strong>Download Results:</strong>
                     <a href="/uploads/{{ filename }}" download>Redacted PDF</a> |
-                    <a href="/uploads/{{ filename }}.secure" download>Secure Sidecar File</a>
+                    <a href="/download_bundle/{{ filename }}">Secure Bundle (Zip)</a>
                 </div>
                 {% endif %}
             </form>
@@ -328,15 +300,11 @@
     <!-- VIEW PANEL -->
     <div id="panel-view" class="panel">
         <h3>Secure Viewer</h3>
-        <p>For this demo, we assume the file you just uploaded/redacted is the one to view.</p>
-        <p>If you were a recipient, you would upload the files here (not implemented in this demo for simplicity,
-            reusing current session file).</p>
-
-        <button onclick="loadSecureView()" class="action">Load Interactive View</button>
+        <button onclick="loadSecureView()" class="action-btn secondary">Load Interactive View</button>
         <p><small>Click distinct blue zones to decrypt.</small></p>
     </div>
 
-    <!-- PDF CONTAINER (Shared) -->
+    <!-- PDF CONTAINER -->
     {% if filename %}
     <div id="container">
         <canvas id="the-canvas"></canvas>
@@ -345,35 +313,53 @@
     </div>
     {% endif %}
 
-    <!-- DECRYPT MODAL -->
-    <div id="modal-overlay" class="modal-overlay">
+    <!-- MODAL: Protect Zone -->
+    <div id="password-modal-overlay" class="modal-overlay">
         <div class="modal">
-            <h3>Secure Access</h3>
-            <div id="modal-login">
-                <p>Enter the password for this secure zone:</p>
-                <input type="password" id="modal-pass" class="modern-input" placeholder="Password">
-                <button onclick="submitDecrypt()" class="action-btn primary">Unlock Data</button>
-                <p id="modal-error" style="color:red; margin-top:10px;"></p>
+            <h3>Protect This Zone</h3>
+
+            <label><input type="checkbox" id="auto-gen-check" checked onchange="togglePasswordInput()"> Auto-generate
+                Password & Email Users</label>
+
+            <div id="manual-password-section" style="display:none; margin-top:15px;">
+                <label>Manual Password</label>
+                <input type="text" id="new-zone-password" class="modern-input" placeholder="Set Password">
             </div>
-            <div id="modal-content" style="display:none;">
-                <h4>Decrypted Data</h4>
-                <div id="decrypted-content"></div>
-                <div class="timer" id="timer">60:00</div>
-                <button onclick="closeModal()" class="action-btn secondary" style="margin-top:20px;">Close (Data
-                    Vanishes)</button>
+
+            <div style="margin-top:15px;">
+                <label>Authorize Users (Search AD/Local)</label>
+                <div class="selected-users" id="selected-users-container"></div>
+                <div class="user-search-container">
+                    <input type="text" id="user-search-input" class="modern-input" placeholder="Type name to search..."
+                        onkeyup="searchUsers(this.value)">
+                    <div id="search-results" class="search-results"></div>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                <button onclick="cancelZone()" class="action-btn secondary">Cancel</button>
+                <button onclick="confirmZone()" class="action-btn primary">Secure Zone</button>
             </div>
         </div>
     </div>
 
-    <!-- NEW PASSWORD CREATION MODAL -->
-    <div id="password-modal-overlay" class="modal-overlay" style="display:none;">
+    <!-- MODAL: Decrypt -->
+    <div id="decrypt-modal-overlay" class="modal-overlay">
         <div class="modal">
-            <h3>Protect This Zone</h3>
-            <p>Enter a unique password to secure this specific area.</p>
-            <input type="password" id="new-zone-password" class="modern-input" placeholder="Set Password">
-            <div class="modal-actions">
-                <button onclick="cancelZone()" class="action-btn secondary">Cancel</button>
-                <button onclick="confirmZone()" class="action-btn primary">Set Password</button>
+            <h3>Secure Access</h3>
+            <div id="modal-login">
+                <p>Enter password:</p>
+                <input type="password" id="modal-pass" class="modern-input">
+                <button onclick="submitDecrypt()" class="action-btn primary">Unlock</button>
+                <p id="modal-error" style="color:red; margin-top:10px;"></p>
+            </div>
+            <div id="modal-content" style="display:none;">
+                <h4>Decrypted Data</h4>
+                <div id="decrypted-content"
+                    style="background:#f9f9f9; padding:10px; border:1px solid #eee; margin-top:10px;"></div>
+                <div class="timer" id="timer" style="color:red; font-size:20px; margin-top:10px;">60:00</div>
+                <button onclick="closeDecryptModal()" class="action-btn secondary"
+                    style="margin-top:20px;">Close</button>
             </div>
         </div>
     </div>
@@ -382,31 +368,27 @@
         var currentFilename = "{{ filename }}";
         var isRedactMode = true;
 
+        // --- Mode Switching ---
         function switchMode(mode) {
             document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-
             if (mode === 'redact') {
                 document.querySelector('[onclick="switchMode(\'redact\')"]').classList.add('active');
                 document.getElementById('panel-redact').classList.add('active');
                 document.getElementById('selection-box').style.display = 'none';
-                document.getElementById('overlays').innerHTML = '';
                 isRedactMode = true;
             } else {
                 document.querySelector('[onclick="switchMode(\'view\')"]').classList.add('active');
                 document.getElementById('panel-view').classList.add('active');
                 isRedactMode = false;
+                loadSecureView();
             }
         }
 
-        // PDF Rendering
+        // --- PDF Rendering ---
         {% if filename %}
         var url = '/uploads/' + currentFilename;
-        var pdfDoc = null,
-            pageNum = 1,
-            scale = 1.0,
-            canvas = document.getElementById('the-canvas'),
-            ctx = canvas.getContext('2d');
+        var pdfDoc = null, pageNum = 1, scale = 1.0, canvas = document.getElementById('the-canvas'), ctx = canvas.getContext('2d');
 
         pdfjsLib.getDocument(url).promise.then(function (pdfDoc_) {
             pdfDoc = pdfDoc_;
@@ -418,24 +400,17 @@
                 var viewport = page.getViewport({ scale: scale });
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
-
-                var renderContext = {
-                    canvasContext: ctx,
-                    viewport: viewport
-                };
-                page.render(renderContext);
+                page.render({ canvasContext: ctx, viewport: viewport });
             });
         }
 
-        // REDACTION DRAWING LOGIC
+        // --- Drawing Logic ---
         var selectionBox = document.getElementById('selection-box');
         var container = document.getElementById('container');
-        var isDrawing = false;
-        var startX, startY;
-
-        // Multi-zone state
-        var pendingZones = []; // Array of {rect: [x,y,w,h], password: "..."}
-        var currentDraftRect = null; // {x, y, w, h, el}
+        var isDrawing = false, startX, startY;
+        var pendingZones = [];
+        var currentDraftRect = null;
+        var currentSelectedUsers = [];
 
         container.addEventListener('mousedown', function (e) {
             if (!isRedactMode) return;
@@ -443,7 +418,6 @@
             startX = e.clientX - rect.left;
             startY = e.clientY - rect.top;
             isDrawing = true;
-
             selectionBox.style.left = startX + 'px';
             selectionBox.style.top = startY + 'px';
             selectionBox.style.width = '0px';
@@ -456,10 +430,8 @@
             var rect = container.getBoundingClientRect();
             var currentX = e.clientX - rect.left;
             var currentY = e.clientY - rect.top;
-
             var width = currentX - startX;
             var height = currentY - startY;
-
             selectionBox.style.width = Math.abs(width) + 'px';
             selectionBox.style.height = Math.abs(height) + 'px';
             selectionBox.style.left = (width < 0 ? currentX : startX) + 'px';
@@ -469,218 +441,203 @@
         container.addEventListener('mouseup', function (e) {
             if (!isRedactMode || !isDrawing) return;
             isDrawing = false;
-
             var rect = selectionBox.getBoundingClientRect();
             var containerRect = container.getBoundingClientRect();
-
-            var w = rect.width;
-            var h = rect.height;
-
-            // Ignore tiny accidental clicks
-            if (w < 5 && h < 5) {
-                selectionBox.style.display = 'none';
-                return;
-            }
-
+            var w = rect.width, h = rect.height;
+            if (w < 5 && h < 5) { selectionBox.style.display = 'none'; return; }
             var x = rect.left - containerRect.left;
             var y = rect.top - containerRect.top;
-
             currentDraftRect = [x, y, w, h];
-
-            // Show password prompt immediately
-            showPasswordModal();
+            showZoneModal();
         });
 
-        // PASSWORD MODAL LOGIC
-        var passModal = document.getElementById('password-modal-overlay');
-        var passInput = document.getElementById('new-zone-password');
-
-        function showPasswordModal() {
-            passModal.style.display = 'flex';
-            passInput.value = '';
-            passInput.focus();
+        // --- Zone Modal & User Search ---
+        function showZoneModal() {
+            document.getElementById('password-modal-overlay').style.display = 'flex';
+            currentSelectedUsers = [];
+            renderSelectedUsers();
+            document.getElementById('new-zone-password').value = '';
+            document.getElementById('user-search-input').value = '';
+            document.getElementById('auto-gen-check').checked = true;
+            togglePasswordInput();
         }
 
         function cancelZone() {
-            passModal.style.display = 'none';
+            document.getElementById('password-modal-overlay').style.display = 'none';
             selectionBox.style.display = 'none';
-            currentDraftRect = null;
+        }
+
+        function togglePasswordInput() {
+            var auto = document.getElementById('auto-gen-check').checked;
+            document.getElementById('manual-password-section').style.display = auto ? 'none' : 'block';
+        }
+
+        function searchUsers(q) {
+            if (q.length < 2) {
+                document.getElementById('search-results').style.display = 'none';
+                return;
+            }
+            fetch('/api/search_users?q=' + q)
+                .then(r => r.json())
+                .then(users => {
+                    var resDiv = document.getElementById('search-results');
+                    resDiv.innerHTML = '';
+                    if (users.length > 0) {
+                        resDiv.style.display = 'block';
+                        users.forEach(u => {
+                            var div = document.createElement('div');
+                            div.className = 'search-item';
+                            div.innerText = u.username + " (" + u.source + ")";
+                            div.onclick = function () { addUser(u); };
+                            resDiv.appendChild(div);
+                        });
+                    } else {
+                        resDiv.style.display = 'none';
+                    }
+                });
+        }
+
+        function addUser(user) {
+            // Check duplications
+            if (!currentSelectedUsers.find(u => u.id == user.id)) {
+                currentSelectedUsers.push(user);
+                renderSelectedUsers();
+            }
+            document.getElementById('search-results').style.display = 'none';
+            document.getElementById('user-search-input').value = '';
+        }
+
+        function removeUser(userId) {
+            currentSelectedUsers = currentSelectedUsers.filter(u => u.id != userId);
+            renderSelectedUsers();
+        }
+
+        function renderSelectedUsers() {
+            var container = document.getElementById('selected-users-container');
+            container.innerHTML = '';
+            currentSelectedUsers.forEach(u => {
+                var tag = document.createElement('div');
+                tag.className = 'user-tag';
+                tag.innerHTML = u.username + " <span onclick='removeUser(\"" + u.id + "\")'>&times;</span>";
+                container.appendChild(tag);
+            });
         }
 
         function confirmZone() {
-            var pwd = passInput.value;
-            if (!pwd) {
-                alert("Password is required for this zone.");
+            var auto = document.getElementById('auto-gen-check').checked;
+            var pwd = document.getElementById('new-zone-password').value;
+
+            if (!auto && !pwd) {
+                alert("Please enter a password or select Auto-generate.");
                 return;
             }
+            if (auto) pwd = ""; // Backend handles this
 
-            // Add to list
             pendingZones.push({
                 rect: currentDraftRect,
-                password: pwd
+                password: pwd,
+                allowedUsers: currentSelectedUsers
             });
 
-            // Render visual persistence
+            // Visual feedback
             renderPendingZone(currentDraftRect);
+            document.getElementById('zone-count').innerText = pendingZones.length;
 
-            // Update UI count
-            updateZoneCount();
-
-            // Reset
-            passModal.style.display = 'none';
-            selectionBox.style.display = 'none';
-            currentDraftRect = null;
+            cancelZone(); // Hide modal
         }
 
         function renderPendingZone(r) {
             var el = document.createElement('div');
             el.className = 'pending-zone';
-            el.style.left = r[0] + 'px';
-            el.style.top = r[1] + 'px';
-            el.style.width = r[2] + 'px';
-            el.style.height = r[3] + 'px';
-            el.title = "Pending Redaction (Secured)";
-
-            var icon = document.createElement('span');
-            icon.innerText = "🔒";
-            icon.style.position = "absolute";
-            icon.style.top = "50%";
-            icon.style.left = "50%";
-            icon.style.transform = "translate(-50%, -50%)";
-            icon.style.fontSize = "20px";
-
-            el.appendChild(icon);
+            el.style.left = r[0] + 'px'; el.style.top = r[1] + 'px';
+            el.style.width = r[2] + 'px'; el.style.height = r[3] + 'px';
+            el.style.position = 'absolute';
+            el.style.background = 'rgba(220, 53, 69, 0.3)';
+            el.style.border = '2px solid #dc3545';
             document.getElementById('overlays').appendChild(el);
-        }
-
-        function updateZoneCount() {
-            document.getElementById('zone-count').innerText = pendingZones.length;
         }
 
         function clearZones() {
             pendingZones = [];
-            document.getElementById('overlays').innerHTML = ''; // Clears both view overlays and pending redacts
-            updateZoneCount();
-            if (!isRedactMode) loadSecureView(); // Reload view overlays if we were in view mode (unlikely here)
+            document.getElementById('overlays').innerHTML = '';
+            document.getElementById('zone-count').innerText = 0;
         }
 
-        // Intercept form submission
         document.getElementById('redact-form')?.addEventListener('submit', function (e) {
             if (pendingZones.length === 0) {
                 e.preventDefault();
-                alert("Please draw at least one redaction zone.");
+                alert("No zones created.");
                 return;
             }
             document.getElementById('zones-input').value = JSON.stringify(pendingZones);
         });
 
-        // VIEW MODE LOGIC
+        // --- View Mode ---
         function loadSecureView() {
             if (!currentFilename) return;
-
-            fetch('/api/secure_metadata/' + currentFilename)
-                .then(res => res.json())
-                .then(data => {
-                    var container = document.getElementById('overlays');
-                    container.innerHTML = '';
-
-                    if (data.zones && data.zones.length > 0) {
-                        document.getElementById('download-bundle-btn').style.display = 'inline-block';
-                    }
-
-                    if (data.zones && data.zones.length > 0) {
-                        document.getElementById('download-bundle-btn').style.display = 'inline-block';
-                    }
-
-                    data.zones.forEach(zone => {
-                        // Only for current page in this demo
-                        if (zone.page !== (pageNum - 1)) return;
-
+            fetch('/api/secure_metadata/' + currentFilename).then(r => r.json()).then(d => {
+                var ov = document.getElementById('overlays');
+                ov.innerHTML = '';
+                if (d.zones) {
+                    d.zones.forEach(z => {
+                        // Check page
+                        if (z.page !== (pageNum - 1)) return;
                         var el = document.createElement('div');
                         el.className = 'secure-zone';
-                        // rect is [x, y, w, h] from our rect_redactor (which stored PDF.js coords)
-                        el.style.left = zone.rect[0] + 'px';
-                        el.style.top = zone.rect[1] + 'px';
-                        el.style.width = zone.rect[2] + 'px';
-                        el.style.height = zone.rect[3] + 'px';
-
-                        el.onclick = function () {
-                            openModal(zone.content);
-                        };
-
-                        container.appendChild(el);
+                        el.style.left = z.rect[0] + 'px'; el.style.top = z.rect[1] + 'px';
+                        el.style.width = z.rect[2] + 'px'; el.style.height = z.rect[3] + 'px';
+                        el.onclick = function () { openDecryptModal(z.content); };
+                        ov.appendChild(el);
                     });
-                });
+                }
+            });
         }
 
-        // DECRYPTION MODAL
-        var currentEncryptedContent = null;
-        var timerInterval = null;
-
-        function openModal(content) {
-            currentEncryptedContent = content;
-            document.getElementById('modal-overlay').style.display = 'flex';
+        var currentContent = null, timerInt = null;
+        function openDecryptModal(content) {
+            currentContent = content;
+            document.getElementById('decrypt-modal-overlay').style.display = 'flex';
             document.getElementById('modal-login').style.display = 'block';
             document.getElementById('modal-content').style.display = 'none';
             document.getElementById('modal-pass').value = '';
-            document.getElementById('modal-error').innerText = '';
         }
 
-        function closeModal() {
-            document.getElementById('modal-overlay').style.display = 'none';
-            document.getElementById('decrypted-content').innerText = '';
-            if (timerInterval) clearInterval(timerInterval);
+        function closeDecryptModal() {
+            document.getElementById('decrypt-modal-overlay').style.display = 'none';
+            if (timerInt) clearInterval(timerInt);
         }
 
         function submitDecrypt() {
             var pwd = document.getElementById('modal-pass').value;
             fetch('/api/decrypt_zone', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: currentEncryptedContent, password: pwd })
-            })
-                .then(res => {
-                    if (res.ok) return res.json();
-                    return res.json().then(e => { throw new Error(e.error) });
-                })
-                .then(data => {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: currentContent, password: pwd })
+            }).then(r => r.json()).then(d => {
+                if (d.error) {
+                    document.getElementById('modal-error').innerText = d.error;
+                } else {
                     document.getElementById('modal-login').style.display = 'none';
                     document.getElementById('modal-content').style.display = 'block';
-                    document.getElementById('decrypted-content').innerText = data.text;
-                    startTimer(60 * 60); // 60 minutes
-                })
-                .catch(e => {
-                    document.getElementById('modal-error').innerText = e.message;
-                });
-        }
-
-        function startTimer(duration) {
-            var display = document.getElementById('timer');
-            var timer = duration, minutes, seconds;
-            if (timerInterval) clearInterval(timerInterval);
-
-            timerInterval = setInterval(function () {
-                minutes = parseInt(timer / 60, 10);
-                seconds = parseInt(timer % 60, 10);
-
-                minutes = minutes < 10 ? "0" + minutes : minutes;
-                seconds = seconds < 10 ? "0" + seconds : seconds;
-
-                display.textContent = minutes + ":" + seconds;
-
-                if (--timer < 0) {
-                    closeModal(); // Time's up
+                    document.getElementById('decrypted-content').innerText = typeof d.text === 'object' ? JSON.stringify(d.text) : d.text;
+                    startTimer();
                 }
-            }, 1000);
+            });
         }
 
-        function downloadBundle() {
-            if (currentFilename) window.location.href = "/download_bundle/" + currentFilename;
+        function startTimer() {
+            var t = 3600;
+            var d = document.getElementById('timer');
+            if (timerInt) clearInterval(timerInt);
+            timerInt = setInterval(function () {
+                var m = Math.floor(t / 60);
+                var s = t % 60;
+                d.innerText = m + ":" + (s < 10 ? "0" + s : s);
+                if (--t < 0) closeDecryptModal();
+            }, 1000);
         }
 
         {% endif %}
     </script>
-
 </body>
 
 </html>
