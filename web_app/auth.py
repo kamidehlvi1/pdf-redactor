@@ -53,7 +53,7 @@ class LDAPProvider(AuthProvider):
             
             # Search for the user to get their DN
             search_filter = '(sAMAccountName={})'.format(username)
-            conn.search(self.search_base, search_filter, attributes=['dn', 'mail', 'displayName'])
+            conn.search(self.search_base, search_filter, attributes=['mail', 'displayName'])
             
             if not conn.entries:
                 return None
