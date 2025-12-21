@@ -28,6 +28,25 @@ You can:
 Get this module and then install its dependencies with:
 
 	pip3 install -r requirements.txt
+    
+## Running the Web Application
+
+To start the Secure PDF Redactor web interface:
+
+**Using PowerShell:**
+```powershell
+./run_app.ps1
+```
+Or manually:
+```powershell
+python web_app/app.py
+```
+
+The application will be available at `http://localhost:5000`.
+- **Login**: Use default admin credentials `admin` / `admin`.
+- **MinIO**: Ensure MinIO is running (`docker run ...`) and configured in `.env`.
+
+
 
 `pdf_redactor.py` processes a PDF given on standard input and writes a new, redacted PDF to standard output:
 

@@ -4,6 +4,6 @@ flask
 flask-login
 flask-sqlalchemy
 ldap3
-minio
+minio==6.0.2
 python-dotenv
 email-validator
