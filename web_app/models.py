@@ -25,3 +25,26 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return '<User {}>'.format(self.username)
+
+class SecureLink(db.Model):
+    token = db.Column(db.String(36), primary_key=True) # UUID
+    file_id = db.Column(db.String(150), nullable=False)
+    granted_to_email = db.Column(db.String(150), nullable=False)
+    granted_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    
+    def is_valid(self):
+        from datetime import datetime
+        return datetime.utcnow() < self.expires_at
+
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_type = db.Column(db.String(50), nullable=False) # LOGIN, LINK_ACCESS, HIJACK_ATTEMPT, etc.
+    user_id = db.Column(db.Integer, nullable=True) # If logged in
+    user_email = db.Column(db.String(150), nullable=True) # If known via link
+    ip_address = db.Column(db.String(50), nullable=True)
+    user_agent = db.Column(db.String(200), nullable=True)
+    details = db.Column(db.Text, nullable=True) # JSON or text
+    timestamp = db.Column(db.DateTime, nullable=False)
+

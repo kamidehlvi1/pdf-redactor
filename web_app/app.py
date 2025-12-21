@@ -11,7 +11,8 @@ import zipfile
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash, jsonify, send_file
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash, jsonify, send_file, session, abort
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash
 
@@ -21,12 +22,19 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import rect_redactor
 from secure_redact import decrypt_data
 from config import Config
-from models import db, User
+from models import db, User, AuditLog, SecureLink
 from auth import CompositeAuthProvider, LocalProvider
 from storage import storage
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Session Security
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=60)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Secure cookie requires HTTPS, but we can set it conditionally or disable for localhost dev
+app.config['SESSION_COOKIE_SECURE'] = False # Set to True in prod with HTTPS
 
 # Initialize Extensions
 db.init_app(app)
@@ -47,6 +55,56 @@ def create_tables():
     # Create default admin if not exists
     if not User.query.filter_by(username='admin').first():
         local_provider.create_user('admin', 'admin', 'admin@example.com')
+
+# --- Helper: Audit Logging ---
+def log_audit(event_type, details=None, user=None):
+    try:
+        if not user:
+            user = current_user if current_user.is_authenticated else None
+            
+        uid = user.id if user else None
+        uemail = user.email if user else None
+        
+        # If details is dict, dump to json string
+        if isinstance(details, dict):
+            details = json.dumps(details)
+            
+        log = AuditLog(
+            event_type=event_type,
+            user_id=uid,
+            user_email=uemail,
+            ip_address=request.remote_addr,
+            user_agent=str(request.user_agent),
+            details=details,
+            timestamp=datetime.utcnow()
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        print("Audit Log Error: {}".format(e))
+
+# --- Middleware: Session Security ---
+@app.before_request
+def check_session_hijack():
+    if current_user.is_authenticated:
+        # Expected IP/UA from session
+        session_ip = session.get('ip')
+        session_ua = session.get('ua')
+        
+        current_ip = request.remote_addr
+        current_ua = str(request.user_agent)
+        
+        if session_ip and session_ip != current_ip:
+            log_audit('HIJACK_ATTEMPT', 'IP Mismatch: {} vs {}'.format(session_ip, current_ip))
+            logout_user()
+            flash("Session invalidated due to IP change.")
+            return redirect(url_for('login'))
+            
+        if session_ua and session_ua != current_ua:
+            log_audit('HIJACK_ATTEMPT', 'UA Mismatch') # Don't log full UA to save space or log it if needed
+            logout_user()
+            flash("Session invalidated due to browser change.")
+            return redirect(url_for('login'))
 
 # --- Email Helper ---
 def send_email(to_email, subject, body):
@@ -83,16 +141,26 @@ def login():
         
         user = auth_provider.authenticate(username, password)
         if user:
+            # Bind session to IP/UA for anti-hijacking
+            session['ip'] = request.remote_addr
+            session['ua'] = str(request.user_agent)
+            session.permanent = True
+            
+            log_audit('LOGIN', user=user)
             login_user(user)
             return redirect(url_for('index'))
         else:
+            log_audit('LOGIN_FAILED', {'username': username})
             flash('Invalid username or password')
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
+@login_required
 def logout():
+    log_audit('LOGOUT', user=current_user)
     logout_user()
+    session.clear()
     return redirect(url_for('login'))
 
 @app.route('/')
@@ -226,9 +294,43 @@ def redact():
             for u in allowed_users:
                 email = u.get('email')
                 if email:
+                    # Create Secure Link
+                    token = str(uuid.uuid4())
+                    link = SecureLink(
+                        token=token,
+                        file_id=filename, # Link points to original or redacted? 
+                        # Actually redacted view usually needs the redacted file. 
+                        # We'll determine filename later in logic, but wait... 
+                        # Secure Links should probably point to the output filename.
+                        # But output filename isn't known yet! 
+                        # Let's use the input filename and resolve 'redacted_' prefix dynamically or 
+                        # Better: Process zones first, THEN send emails.
+                    )
+                    # Issue: filename here is INPUT filename. Output is likely 'redacted_' + filename.
+                    # We should defer email sending until AFTER redaction or predict the name.
+                    # The code predicts: output_filename = "redacted_" + filename (if not already)
+                    
+                    target_file = filename if filename.startswith("redacted_") else "redacted_" + filename
+                    
+                    link.file_id = target_file
+                    link.granted_to_email = email
+                    link.granted_by_id = current_user.id
+                    link.created_at = datetime.utcnow()
+                    link.expires_at = datetime.utcnow() + timedelta(days=7) # 1 week expiry
+                    
+                    db.session.add(link)
+                    log_audit('LINK_CREATED', {'token': token, 'target': target_file, 'to': email})
+                    
+                    view_url = url_for('view_shared', token=token, _external=True)
+                    
                     subject = "Secure Document Access Granted"
-                    body = "Hello,\n\nYou have been granted access to a secure section of a document.\n\nPassword: {}\n\nPlease keep this password secure.".format(pwd)
+                    body = "Hello,\n\nYou have been granted access to a secure document.\n\n" \
+                           "Access Link: {}\n" \
+                           "Password: {}\n\n" \
+                           "Please keep this credentials secure.".format(view_url, pwd)
                     send_email(email, subject, body)
+            
+            db.session.commit() # Commit links
         
         processed_zones.append(zone)
 
@@ -379,6 +481,35 @@ def admin_create_user():
     else:
         flash("User already exists.")
     return redirect(url_for('admin_panel'))
+
+    return redirect(url_for('admin_panel'))
+
+@app.route('/view_shared/<token>')
+def view_shared(token):
+    # 1. Validate Token
+    link = SecureLink.query.get(token)
+    if not link or not link.is_valid():
+        flash("Invalid or expired link.")
+        return redirect(url_for('index'))
+    
+    # 2. Authentication Required
+    if not current_user.is_authenticated:
+        return redirect(url_for('login', next=request.url))
+        
+    # 3. Authorization Check (Identity Verification)
+    # Check if current user email matches granted email
+    # Note: AD users might have email populated. Local users definitely do if set.
+    user_email = current_user.email
+    if not user_email or user_email.lower() != link.granted_to_email.lower():
+        # Fallback: Maybe they used username? But we granted to email.
+        # Strict security: Deny.
+        log_audit('ACCESS_DENIED', {'token': token, 'reason': 'Email mismatch', 'user': current_user.username})
+        flash("Access Denied. You are logged in as {}, but this link is for {}.".format(current_user.username, link.granted_to_email))
+        return redirect(url_for('index'))
+
+    # 4. Success -> Redirect to Editor
+    log_audit('LINK_ACCESS', {'token': token, 'file': link.file_id})
+    return redirect(url_for('editor', filename=link.file_id))
 
 if __name__ == '__main__':
     app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
