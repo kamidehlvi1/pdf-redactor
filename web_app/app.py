@@ -22,7 +22,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import rect_redactor
 from secure_redact import decrypt_data
 from config import Config
-from models import db, User, AuditLog, SecureLink
+from models import db, User, AuditLog, SecureLink, PDFMetadata, LedgerBlock, AccessPermission
+from ledger import ledger
 from auth import CompositeAuthProvider, LocalProvider
 from storage import storage
 
@@ -55,6 +56,13 @@ def create_tables():
     # Create default admin if not exists
     if not User.query.filter_by(username='admin').first():
         local_provider.create_user('admin', 'admin', 'admin@example.com')
+        # Assign admin role
+        u = User.query.filter_by(username='admin').first()
+        u.role = 'admin'
+        db.session.commit()
+    
+    # Init Ledger
+    ledger.create_genesis_block()
 
 # --- Helper: Audit Logging ---
 def log_audit(event_type, details=None, user=None):
@@ -166,7 +174,22 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    return render_template('index.html', user=current_user)
+    # V3 Dashboard Data
+    
+    # 1. My PDFs
+    my_pdfs = PDFMetadata.query.filter_by(owner_id=current_user.id).order_by(PDFMetadata.upload_timestamp.desc()).all()
+    
+    # 2. Shared With Me (via SecureLink)
+    # Find links granted to current user's email
+    shared_links = []
+    if current_user.email:
+        shared_links = SecureLink.query.filter_by(granted_to_email=current_user.email).all()
+        
+    # 3. Activity Logs
+    # User sees their own logs. Admin sees all? Requirement: "Every user must have access to: Their own activity logs only"
+    logs = AuditLog.query.filter((AuditLog.user_id == current_user.id) | (AuditLog.user_email == current_user.email)).order_by(AuditLog.timestamp.desc()).limit(50).all()
+    
+    return render_template('dashboard.html', user=current_user, my_pdfs=my_pdfs, shared_links=shared_links, logs=logs)
 
 @app.route('/api/search_users')
 @login_required
@@ -234,12 +257,71 @@ def upload_file():
              
         # New PDF Upload
         internal_name = str(uuid.uuid4()) + ".pdf"
+        
+        # V3: Calculate Hash & Ledger
+        import hashlib
+        file.stream.seek(0)
+        sha256_hash = hashlib.sha256(file.stream.read()).hexdigest()
+        file.stream.seek(0)
+        
         storage.save_file(file, internal_name)
+        
+        # Create Metadata
+        meta = PDFMetadata(
+            id=internal_name.replace('.pdf', ''), # UUID
+            owner_id=current_user.id,
+            filename=internal_name,
+            original_filename=filename,
+            file_hash=sha256_hash,
+            upload_timestamp=datetime.utcnow(),
+            is_purged=False
+        )
+        
+        # Add to Ledger
+        block_data = {
+            'action': 'UPLOAD',
+            'file_id': meta.id,
+            'owner_id': current_user.id,
+            'hash': sha256_hash,
+            'filename': filename
+        }
+        block = ledger.add_block(block_data)
+        meta.ledger_ref = block.hash
+        
+        db.session.add(meta)
+        log_audit('UPLOAD', {'file_id': meta.id, 'hash': sha256_hash})
+        db.session.commit()
+        
         return redirect(url_for('editor', filename=internal_name))
 
 @app.route('/editor/<filename>')
 @login_required
 def editor(filename):
+    # V3 Logic
+    meta = PDFMetadata.query.filter_by(filename=filename).first()
+    
+    if meta:
+        if meta.is_purged:
+            # Gone (We need a purged template or just error)
+            flash("This document has been permanently purged.")
+            return redirect(url_for('index'))
+            
+        # Permission Check
+        # Owner or Admin -> Full Access (Editor Mode)
+        if current_user.is_admin or current_user.id == meta.owner_id:
+            # Serve the original Editor (index.html) which allows redaction
+            return render_template('index.html', filename=filename, user=current_user)
+            
+        # Restricted User -> Viewer V3 (Restricted Mode)
+        return render_template('viewer_v3.html', filename=filename, mode='restricted', user=current_user)
+
+    # Legacy Fallback
+    if not storage.exists(filename):
+        flash("File not found.")
+        return redirect(url_for('index'))
+    return render_template('index.html', filename=filename, user=current_user)
+
+    # Legacy Fallback
     if not storage.exists(filename):
         flash("File not found.")
         return redirect(url_for('index'))
@@ -481,6 +563,42 @@ def admin_create_user():
     else:
         flash("User already exists.")
     return redirect(url_for('admin_panel'))
+
+@app.route('/purge/<pdf_id>', methods=['POST'])
+@login_required
+def purge_file(pdf_id):
+    # Verify Permissions
+    meta = PDFMetadata.query.get(pdf_id)
+    if not meta:
+        filename = pdf_id + ".pdf" # Fallback if ID is just UUID part
+        # Try finding by filename if ID lookup fails (legacy support?)
+        # For now assume ID matches.
+        return "File not found", 404
+        
+    if not current_user.is_admin and current_user.id != meta.owner_id:
+        log_audit('ACCESS_DENIED', {'action': 'PURGE', 'file_id': pdf_id})
+        return "Unauthorized", 403
+        
+    # Perform Purge
+    # 1. Delete physical file
+    storage.delete(meta.filename)
+    
+    meta.is_purged = True
+    
+    # Ledger
+    block_data = {
+        'action': 'PURGE',
+        'file_id': pdf_id,
+        'by_user': current_user.id,
+        'timestamp': time.time()
+    }
+    block = ledger.add_block(block_data)
+    
+    log_audit('PURGE', {'file_id': pdf_id, 'ledger_hash': block.hash})
+    db.session.commit()
+    
+    flash("File permanently purged.")
+    return redirect(url_for('index'))
 
     return redirect(url_for('admin_panel'))
 

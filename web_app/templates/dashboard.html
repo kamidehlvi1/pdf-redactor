@@ -1,0 +1,154 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2 class="mb-3">Dashboard</h2>
+
+        <!-- Upload Section -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Upload New Document</h5>
+                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data"
+                    class="row align-items-center">
+                    <div class="col-auto">
+                        <input type="file" name="pdf_file" class="form-control" required accept=".pdf,.zip">
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary">Secure Upload</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Labs -->
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" id="mypdfs-tab" data-toggle="tab" href="#mypdfs" role="tab">My PDFs</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="shared-tab" data-toggle="tab" href="#shared" role="tab">Shared With Me</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="logs-tab" data-toggle="tab" href="#logs" role="tab">My Activity Logs</a>
+            </li>
+        </ul>
+
+        <div class="tab-content profile-tab" id="myTabContent">
+            <!-- My PDFs Tab -->
+            <div class="tab-pane fade show active" id="mypdfs" role="tabpanel">
+                <div class="table-responsive mt-3">
+                    <table class="table table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Filename</th>
+                                <th>Hash</th>
+                                <th>Uploaded</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pdf in my_pdfs %}
+                            <tr class="{% if pdf.is_purged %}table-danger{% endif %}">
+                                <td>{{ pdf.original_filename }}</td>
+                                <td><small class="text-muted">{{ pdf.file_hash[:10] }}...</small></td>
+                                <td>{{ pdf.upload_timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    {% if pdf.is_purged %}
+                                    <span class="badge badge-danger">PURGED</span>
+                                    {% else %}
+                                    <span class="badge badge-success">Active</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if not pdf.is_purged %}
+                                    <a href="{{ url_for('editor', filename=pdf.filename) }}"
+                                        class="btn btn-sm btn-info">View & Redact</a>
+
+                                    {% if user.is_admin or user.id == pdf.owner_id %}
+                                    <form action="{{ url_for('purge_file', pdf_id=pdf.id) }}" method="POST"
+                                        style="display:inline;"
+                                        onsubmit="return confirm('Are you sure you want to PERMANENTLY purge this file? This cannot be undone.');">
+                                        <button type="submit" class="btn btn-sm btn-danger">Purge</button>
+                                    </form>
+                                    {% endif %}
+                                    {% else %}
+                                    <span class="text-muted">No Actions</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5">No documents uploaded.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Shared Tab -->
+            <div class="tab-pane fade" id="shared" role="tabpanel">
+                <div class="table-responsive mt-3">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Granted At</th>
+                                <th>Expires At</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for link in shared_links %}
+                            <tr>
+                                <td>{{ link.file_id }}</td> {# Ideally lookup original filename, but file_id is what we
+                                store #}
+                                <td>{{ link.created_at.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ link.expires_at.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <a href="{{ url_for('view_shared', token=link.token) }}"
+                                        class="btn btn-sm btn-primary">View Securely</a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4">No documents shared with you.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div class="tab-pane fade" id="logs" role="tabpanel">
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Event</th>
+                                <th>IP</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td><small>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
+                                <td>{{ log.event_type }}</td>
+                                <td>{{ log.ip_address }}</td>
+                                <td><small>{{ log.details }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

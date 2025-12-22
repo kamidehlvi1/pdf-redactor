@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>
+                Secure Viewer
+                {% if mode == 'restricted' %}
+                <span class="badge badge-warning">Restricted View</span>
+                {% else %}
+                <span class="badge badge-success">Full Quality</span>
+                {% endif %}
+            </h3>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Dashboard</a>
+        </div>
+
+        <div class="card shadow-lg" style="height: 80vh; position: relative; overflow: hidden;">
+            <div class="card-body p-0 h-100">
+                <!-- PDF Object -->
+                <object data="{{ url_for('uploaded_file', filename=filename) }}#toolbar=0&navpanes=0&scrollbar=0"
+                    type="application/pdf" width="100%" height="100%" style="border: none;">
+                    <p>This browser does not support PDFs. Please verify your viewer settings.</p>
+                </object>
+
+                {% if mode == 'restricted' %}
+                <!-- Watermark Overlay -->
+                <div
+                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; justify-content: center; align-items: center; flex-direction: column; overflow: hidden;">
+                    <div
+                        style="transform: rotate(-45deg); opacity: 0.15; font-size: 5rem; color: red; white-space: nowrap; font-weight: bold;">
+                        CONFIDENTIAL<br>{{ user.username }}<br>{{ user.email }}
+                    </div>
+                    <div
+                        style="transform: rotate(-45deg); opacity: 0.15; font-size: 5rem; color: red; white-space: nowrap; font-weight: bold; margin-top: 200px;">
+                        DO NOT DISTRIBUTE
+                    </div>
+                </div>
+
+                <!-- Interaction Blocker (Transparent) - Optional, blocks selection if pointer-events:all -->
+                <!-- If we want to block clicks (no save as image) -->
+                <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5;"
+                    oncontextmenu="return false;"></div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if mode == 'full' %}
+        <div class="mt-3">
+            <a href="{{ url_for('uploaded_file', filename=filename) }}" class="btn btn-outline-primary"
+                download>Download Original</a>
+            <!-- Additional Owner Actions -->
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    // Disable right click globally in this viewer
+    document.addEventListener('contextmenu', event => event.preventDefault());
+</script>
+{% endblock %}
