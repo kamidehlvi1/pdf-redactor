@@ -96,6 +96,7 @@
                     <th>Username</th>
                     <th>Email</th>
                     <th>Type</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -105,6 +106,17 @@
                     <td>{{ user.username }}</td>
                     <td>{{ user.email or '-' }}</td>
                     <td>local</td>
+                    <td>
+                        <a href="{{ url_for('admin_edit_user', user_id=user.id) }}"
+                            class="btn btn-sm btn-primary">Edit</a>
+                        {% if user.username != 'admin' %}
+                        <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST"
+                            style="display:inline;" onsubmit="return confirm('Delete this user?');">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                style="padding: 4px 8px; font-size: 0.875rem;">Delete</button>
+                        </form>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

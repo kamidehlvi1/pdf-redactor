@@ -564,6 +564,48 @@ def admin_create_user():
         flash("User already exists.")
     return redirect(url_for('admin_panel'))
 
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+@login_required
+def admin_delete_user(user_id):
+    if current_user.username != 'admin' and not current_user.is_admin:
+        return "Unauthorized", 403
+    
+    user = User.query.get(user_id)
+    if user:
+        if user.username == 'admin':
+            flash("Cannot delete default admin.")
+        else:
+            db.session.delete(user)
+            db.session.commit()
+            flash("User deleted.")
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/edit_user/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def admin_edit_user(user_id):
+    if current_user.username != 'admin' and not current_user.is_admin:
+        return "Unauthorized", 403
+        
+    user = User.query.get(user_id)
+    if not user:
+        flash("User not found")
+        return redirect(url_for('admin_panel'))
+        
+    if request.method == 'POST':
+        user.username = request.form.get('username')
+        user.email = request.form.get('email')
+        
+        # Optional password update
+        password = request.form.get('password')
+        if password:
+            user.set_password(password)
+            
+        db.session.commit()
+        flash("User updated.")
+        return redirect(url_for('admin_panel'))
+        
+    return render_template('edit_user.html', user=user)
+
 @app.route('/purge/<pdf_id>', methods=['POST'])
 @login_required
 def purge_file(pdf_id):
