@@ -70,6 +70,9 @@
 <body>
     <div class="container">
         <a href="/" class="back-link">&larr; Back to App</a>
+        <div style="float: right;">
+            <a href="{{ url_for('admin_ad_panel') }}" class="btn btn-outline-primary">Manage Active Directory</a>
+        </div>
         <h1>Local User Management</h1>
 
         {% with messages = get_flashed_messages() %}

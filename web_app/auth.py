@@ -97,9 +97,7 @@ class LDAPProvider(AuthProvider):
             results = []
             for entry in conn.entries:
                 results.append({
-                    'id': str(entry.sAMAccountName), # Use string for AD (or we sync and use int ID?)
-                    # For consistency with Local, let's return a dict structure. 
-                    # If the user selects this, we might auto-create the shadow user record.
+                    'id': str(entry.sAMAccountName), 
                     'username': str(entry.sAMAccountName),
                     'source': 'Active Directory',
                     'email': str(entry.mail) if 'mail' in entry else ""
@@ -108,6 +106,96 @@ class LDAPProvider(AuthProvider):
         except Exception as e:
             print("LDAP Search Error: {}".format(e))
             return []
+
+    def create_ad_user(self, username, password, email=None, firstname="User", lastname="Name"):
+        if not self.enabled:
+            return False, "AD Not Enabled"
+            
+        try:
+            server = ldap3.Server(self.server_uri, get_info=ldap3.ALL)
+            conn = ldap3.Connection(server, user=self.bind_dn, password=self.bind_password, auto_bind=True)
+            
+            # Construct DN
+            # Default to CN=Users,DC=example,DC=com (Same as Search Base or specifically Users container)
+            # We assume Search Base is the domain root or appropriate OU. Let's try to infer or use config.
+            # Simplified: Use Search Base directly if it's an OU, or append string.
+            # For robustness, we will assume self.search_base is where we want to put them for now.
+            dn = "CN={},{}".format(username, self.search_base)
+            
+            attributes = {
+                'objectClass': ['top', 'person', 'organizationalPerson', 'user'],
+                'cn': username,
+                'sAMAccountName': username,
+                'userPrincipalName': '{}@{}'.format(username, self.search_base.replace('DC=','').replace(',','.')), # Rough domain guess
+                'userPassword': password,
+                'givenName': firstname,
+                'sn': lastname,
+                'displayName': "{} {}".format(firstname, lastname),
+                'mail': email or "",
+                'userAccountControl': 512 # Enable Account (Normal Account)
+            }
+            
+            if conn.add(dn, attributes=attributes):
+                return True, "User Created in AD"
+            else:
+                return False, "LDAP Error: {}".format(conn.result['description'])
+                
+        except Exception as e:
+            return False, str(e)
+
+    def create_ad_group(self, groupname):
+        if not self.enabled:
+            return False, "AD Not Enabled"
+            
+        try:
+            server = ldap3.Server(self.server_uri, get_info=ldap3.ALL)
+            conn = ldap3.Connection(server, user=self.bind_dn, password=self.bind_password, auto_bind=True)
+            
+            dn = "CN={},{}".format(groupname, self.search_base)
+            
+            attributes = {
+                'objectClass': ['top', 'group'],
+                'cn': groupname,
+                'sAMAccountName': groupname,
+                'groupType': -2147483646 # Global Security Group
+            }
+            
+            if conn.add(dn, attributes=attributes):
+                return True, "Group Created"
+            else:
+                return False, "LDAP Error: {}".format(conn.result['description'])
+                
+        except Exception as e:
+            return False, str(e)
+
+    def add_user_to_group(self, username, groupname):
+        if not self.enabled:
+            return False, "AD Not Enabled"
+        
+        try:
+            server = ldap3.Server(self.server_uri, get_info=ldap3.ALL)
+            conn = ldap3.Connection(server, user=self.bind_dn, password=self.bind_password, auto_bind=True)
+            
+            # 1. Find User DN
+            conn.search(self.search_base, '(sAMAccountName={})'.format(username), attributes=['distinguishedName'])
+            if not conn.entries:
+                return False, "User not found"
+            user_dn = conn.entries[0].entry_dn
+            
+            # 2. Find Group DN
+            conn.search(self.search_base, '(&(objectClass=group)(cn={}))'.format(groupname), attributes=['distinguishedName'])
+            if not conn.entries:
+                return False, "Group not found"
+            group_dn = conn.entries[0].entry_dn
+            
+            # 3. Modify Group
+            if conn.modify(group_dn, {'member': [(ldap3.MODIFY_ADD, [user_dn])]}):
+                return True, "User added to group"
+            else:
+                return False, "LDAP Error: {}".format(conn.result['description'])
+                
+        except Exception as e:
+            return False, str(e)
 
 class CompositeAuthProvider:
     def __init__(self):

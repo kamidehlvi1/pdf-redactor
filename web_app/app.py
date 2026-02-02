@@ -642,6 +642,65 @@ def purge_file(pdf_id):
     flash("File permanently purged.")
     return redirect(url_for('index'))
 
+# --- AD Management Routes ---
+@app.route('/admin/ad')
+@login_required
+def admin_ad_panel():
+    if current_user.username != 'admin' and not current_user.is_admin:
+        return "Unauthorized", 403
+    return render_template('admin_ad.html')
+
+@app.route('/admin/ad/create_user', methods=['POST'])
+@login_required
+def ad_create_user():
+    if current_user.username != 'admin' and not current_user.is_admin:
+        return "Unauthorized", 403
+        
+    username = request.form.get('username')
+    password = request.form.get('password')
+    email = request.form.get('email')
+    firstname = request.form.get('firstname')
+    lastname = request.form.get('lastname')
+    
+    # Use global composite_provider.ldap or create new instance?
+    # composite_provider is global.
+    success, msg = composite_provider.ldap.create_ad_user(username, password, email, firstname, lastname)
+    if success:
+        flash("AD User Created: {}".format(username))
+    else:
+        flash("Error: {}".format(msg))
+    return redirect(url_for('admin_ad_panel'))
+
+@app.route('/admin/ad/create_group', methods=['POST'])
+@login_required
+def ad_create_group():
+    if current_user.username != 'admin' and not current_user.is_admin:
+        return "Unauthorized", 403
+        
+    groupname = request.form.get('groupname')
+    success, msg = composite_provider.ldap.create_ad_group(groupname)
+    if success:
+        flash("AD Group Created: {}".format(groupname))
+    else:
+        flash("Error: {}".format(msg))
+    return redirect(url_for('admin_ad_panel'))
+
+@app.route('/admin/ad/add_to_group', methods=['POST'])
+@login_required
+def ad_add_to_group():
+    if current_user.username != 'admin' and not current_user.is_admin:
+        return "Unauthorized", 403
+        
+    username = request.form.get('username')
+    groupname = request.form.get('groupname')
+    
+    success, msg = composite_provider.ldap.add_user_to_group(username, groupname)
+    if success:
+        flash("Added {} to group {}".format(username, groupname))
+    else:
+        flash("Error: {}".format(msg))
+    return redirect(url_for('admin_ad_panel'))
+
     return redirect(url_for('admin_panel'))
 
 @app.route('/view_shared/<token>')
